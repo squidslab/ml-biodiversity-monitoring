@@ -5,6 +5,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+import umap
+from sklearn.preprocessing import normalize
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
 
@@ -15,12 +17,12 @@ EXCEL_FILE = "my_dataset.xlsx"
 # ------------------------
 # METODO DEL GOMITO
 # ------------------------
-def esegui_metodo_gomito(embeddings_pca):
+def esegui_metodo_gomito(embeddings_umap):
     print("\n[1] Calcolo del Metodo del Gomito...")
 
     nn = NearestNeighbors(n_neighbors=4)
-    nn.fit(embeddings_pca)
-    distanze, _ = nn.kneighbors(embeddings_pca)
+    nn.fit(embeddings_umap)
+    distanze, _ = nn.kneighbors(embeddings_umap)
 
     distanze = np.sort(distanze[:, 3], axis=0)
 
@@ -35,13 +37,13 @@ def esegui_metodo_gomito(embeddings_pca):
 # ------------------------
 # ESECUZIONE DBSCAN
 # ------------------------
-def esegui_dbscan(embeddings_pca, names, file_output):
+def esegui_dbscan(embeddings_umap, names, file_output):
     print("\n[2] Esecuzione Clustering DBSCAN...")
 
     try:
         eps_val = float(input("Inserisci il valore EPS desiderato: "))
-        dbscan = DBSCAN(eps=eps_val, min_samples=4)
-        labels = dbscan.fit_predict(embeddings_pca)
+        dbscan = DBSCAN(eps=eps_val, min_samples=15)
+        labels = dbscan.fit_predict(embeddings_umap)
 
         df_dbscan = pd.DataFrame({"image name": names, "ID_Cluster": labels})
 
@@ -73,14 +75,14 @@ def esegui_dbscan(embeddings_pca, names, file_output):
 # ------------------------
 # VISUALIZZAZIONE GRAFICO 
 # ------------------------
-def genera_grafico(embeddings_scaled, labels, nome_grafico):
+def genera_grafico(embeddings_norm, labels, nome_grafico):
     if labels is None:
         print("(!) Errore: Esegui prima il clustering (opzione 2).")
         return
 
     print("\n[3] Generazione grafico PCA 2D...")
     pca_2d = PCA(n_components=2)
-    embeddings_2d = pca_2d.fit_transform(embeddings_scaled)
+    embeddings_2d = pca_2d.fit_transform(embeddings_norm)
 
     plt.figure(figsize=(10, 8))
     
@@ -147,25 +149,37 @@ def organizza_cartelle(df_final, output_root):
 def main(tag_gruppo="ALL_DATA"):
     print(f"\n--- INIZIALIZZAZIONE DBSCAN (Sessione: {tag_gruppo}) ---")
     
-    file_resnet = f"features_resnet18_imagenet_{tag_gruppo}.npz"
-    file_vit = f"features_vit_{tag_gruppo}.npz"
+    npz_files = [f for f in os.listdir('.') if f.endswith('.npz')]
+    npz_files.sort()
     
     print("Quale set di feature vuoi analizzare?")
-    print(f"1. ResNet18 ({file_resnet})")
-    print(f"2. ViT-B/16 ({file_vit})")
-    print("3. Inserisci nome file manualmente")
-    scelta_dati = input("Scelta: ")
+    if not npz_files:
+        print("Nessun file .npz trovato nella cartella corrente.")
+        
+    for i, file in enumerate(npz_files, start=1):
+        print(f"{i}. {file}")
+    
+    opzione_manuale = len(npz_files) + 1
+    print(f"{opzione_manuale}. Inserisci path o nome file manualmente")
+    
+    while True:
+        scelta_dati = input("\nScelta: ")
+        try:
+            scelta_idx = int(scelta_dati)
+            if 1 <= scelta_idx <= opzione_manuale:
+                break
+            else:
+                print(f"Scelta non valida. Inserisci un numero tra 1 e {opzione_manuale}.")
+        except ValueError:
+            print("Input non valido. Inserisci un numero intero.")
 
-    modello_tag = "custom"
-    if scelta_dati == "1":
-        features_dati = file_resnet
-        modello_tag = "resnet18_imagenet"
-    elif scelta_dati == "2":
-        features_dati = file_vit
-        modello_tag = "vit"
-    else:
-        features_dati = input("Scrivi il nome esatto del file .npz: ")
+    if scelta_idx == opzione_manuale:
+        features_dati = input("Scrivi il percorso esatto o il nome del file .npz: ")
         modello_tag = input("Nome del modello per i file di output: ").strip().replace(" ", "_")
+    else:
+        features_dati = npz_files[scelta_idx - 1]
+        nome_base = os.path.splitext(features_dati)[0]
+        modello_tag = nome_base.replace("features_", "")
 
     OUTPUT_ROOT = f"Clusters_Risultanti_{modello_tag}_{tag_gruppo}"
     if not os.path.exists(OUTPUT_ROOT):
@@ -177,8 +191,17 @@ def main(tag_gruppo="ALL_DATA"):
         print(f"Caricamento dati da {features_dati}...")
         data = np.load(features_dati)
         names = data["names"]
-        embeddings_scaled = StandardScaler().fit_transform(data["embeddings"])
-        embeddings_pca = PCA(n_components=50, random_state=42).fit_transform(embeddings_scaled)
+        embeddings_norm = normalize(data["embeddings"], norm='l2')
+        
+        print("Riduzione dimensionale con UMAP in corso (potrebbe richiedere qualche secondo)...")
+        embeddings_umap = umap.UMAP(
+            n_components=20,    
+            n_neighbors=15,     
+            min_dist=0.0,        
+            metric='cosine',      
+            random_state=42
+        ).fit_transform(embeddings_norm)
+        
     except FileNotFoundError:
         print(f"ERRORE: File '{features_dati}' non trovato. Hai effettuato l'estrazione per questo gruppo?")
         return
@@ -197,11 +220,11 @@ def main(tag_gruppo="ALL_DATA"):
         scelta = input("\nCosa vuoi fare? ")
 
         if scelta == "1":
-            esegui_metodo_gomito(embeddings_pca)
+            esegui_metodo_gomito(embeddings_umap)
         elif scelta == "2":
-            labels, df_final = esegui_dbscan(embeddings_pca, names, FILE_OUTPUT)
+            labels, df_final = esegui_dbscan(embeddings_umap, names, FILE_OUTPUT)
         elif scelta == "3":
-            genera_grafico(embeddings_scaled, labels, NOME_GRAFICO)
+            genera_grafico(embeddings_norm, labels, NOME_GRAFICO)
         elif scelta == "4":
             organizza_cartelle(df_final, OUTPUT_ROOT)
         elif scelta == "0":
