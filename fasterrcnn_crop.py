@@ -1,8 +1,9 @@
 import os
 import torch
+import shutil
 import torchvision
 import torchvision.transforms.functional as F
-from PIL import Image
+from PIL import Image, ImageOps
 from dotenv import dotenv_values
 
 # --- CONFIGURAZIONE ---
@@ -26,69 +27,80 @@ def load_cropping_model():
         print(f"[!] ERRORE CARICAMENTO MODELLO DETECTOR: {e}")
         return None
 
-def process_single_crop(image: Image.Image, model):
+def process_single_crop(image: Image.Image, model, target_size=(256, 512)):
     img_tensor = F.to_tensor(image).unsqueeze(0).to(device)
 
     with torch.no_grad():
         predictions = model(img_tensor)[0]
 
-    scores = predictions['scores'].cpu().numpy().tolist()
     boxes = predictions['boxes'].cpu().numpy().astype(int).tolist()
     
-    cropped_img = image # Fallback nel caso in cui non trovi nulla
+    if len(boxes) == 0:
+        return None
 
-    if len(boxes) > 0:
-        x_min, y_min, x_max, y_max = boxes[0]
-        
-        # Padding del 10%
-        padding_w = int((x_max - x_min) * 0.10)
-        padding_h = int((y_max - y_min) * 0.10)
-        
-        crop_coords = (
-            max(0, x_min - padding_w),
-            max(0, y_min - padding_h),
-            min(image.width, x_max + padding_w),
-            min(image.height, y_max + padding_h)
-        )
-        cropped_img = image.crop(crop_coords)
-        
-    return cropped_img
-
-def run_smart_cropping(input_folder, output_folder, valid_names=None):
-    model = load_cropping_model()
-    if model is None:
-        return
-
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-        
-    print(f"\nInizio ritaglio intelligente...")
-    print(f"Cartella destinazione: {output_folder}")
+    x_min, y_min, x_max, y_max = boxes[0]
     
-    count = 0
-    for file in sorted(os.listdir(input_folder)):
-        if not file.lower().endswith((".jpg", ".png", ".jpeg")):
-            continue
+    pw = int((x_max - x_min) * 0.10)
+    ph = int((y_max - y_min) * 0.10)
+    crop_coords = (
+        max(0, x_min - pw), max(0, y_min - ph),
+        min(image.width, x_max + pw), min(image.height, y_max + ph)
+    )
+    
+    cropped_img = image.crop(crop_coords)
+    
+    # Ruota se il formato è orizzontale
+    if cropped_img.width > cropped_img.height:
+        cropped_img = cropped_img.rotate(90, expand=True)
 
-        if valid_names is not None and file not in valid_names:
-            continue
+    # Ridimensiona mantenendo l'aspect ratio
+    cropped_img.thumbnail((target_size[0], target_size[1]), Image.Resampling.LANCZOS)
+    
+    # Applica padding nero per raggiungere target_size
+    final_img = Image.new("RGB", target_size, (0, 0, 0))
+    upper_left = (
+        (target_size[0] - cropped_img.width) // 2,
+        (target_size[1] - cropped_img.height) // 2
+    )
+    final_img.paste(cropped_img, upper_left)
+    
+    return final_img
+
+def run_smart_cropping(input_folder, output_folder, discard_folder, valid_names=None):
+    model = load_cropping_model()
+    if model is None: return
+
+    os.makedirs(output_folder, exist_ok=True)
+    os.makedirs(discard_folder, exist_ok=True)
+    
+    count_ok = 0
+    count_fail = 0
+
+    for file in sorted(os.listdir(input_folder)):
+        if not file.lower().endswith((".jpg", ".png", ".jpeg")): continue
+        if valid_names is not None and file not in valid_names: continue
 
         in_path = os.path.join(input_folder, file)
         out_path = os.path.join(output_folder, file)
-
-        # Se l'immagine è già stata ritagliata in passato, saltala per risparmiare tempo
-        if os.path.exists(out_path):
-            continue
+        fail_path = os.path.join(discard_folder, file)
 
         try:
             img = Image.open(in_path).convert("RGB")
-            cropped_img = process_single_crop(img, model)
-            cropped_img.save(out_path)
-            count += 1
-            
-            if count % 20 == 0:
-                print(f"Ritagliate {count} immagini...")
-        except Exception as e:
-            print(f"[SKIP] Errore su {file}: {e}")
+            result_img = process_single_crop(img, model)
 
-    print(f"\n[✓] Fase 0 completata! Elaborate {count} nuove immagini.")
+            if result_img is not None:
+                result_img.save(out_path)
+                count_ok += 1
+            else:
+                shutil.copy(in_path, fail_path)
+                count_fail += 1
+
+            if (count_ok + count_fail) % 20 == 0:
+                print(f"Processati {count_ok + count_fail} file...")
+
+        except Exception as e:
+            print(f"Errore su {file}: {e}")
+
+    print(f"\n[✓] Completato!")
+    print(f"- Immagini ritagliate (512x256): {count_ok}")
+    print(f"- Immagini non rilevate (spostate): {count_fail}")

@@ -11,7 +11,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
 
 # --- CONFIGURAZIONE ---
-IMAGE_FOLDER = "../dataset" 
+IMAGE_FOLDER = "../dataset_new_cropper" 
 EXCEL_FILE = "my_dataset.xlsx"  
 
 # ------------------------
@@ -37,13 +37,13 @@ def esegui_metodo_gomito(embeddings_umap):
 # ------------------------
 # ESECUZIONE DBSCAN
 # ------------------------
-def esegui_dbscan(embeddings_umap, names, file_output):
+def esegui_dbscan(embeddings_norm, names, file_output):
     print("\n[2] Esecuzione Clustering DBSCAN...")
 
     try:
         eps_val = float(input("Inserisci il valore EPS desiderato: "))
         dbscan = DBSCAN(eps=eps_val, min_samples=15)
-        labels = dbscan.fit_predict(embeddings_umap)
+        labels = dbscan.fit_predict(embeddings_norm)
 
         df_dbscan = pd.DataFrame({"image name": names, "ID_Cluster": labels})
 
@@ -80,7 +80,7 @@ def genera_grafico(embeddings_norm, labels, nome_grafico):
         print("(!) Errore: Esegui prima il clustering (opzione 2).")
         return
 
-    print("\n[3] Generazione grafico PCA 2D...")
+    print("\n[3] Generazione grafico 2D...")
     pca_2d = PCA(n_components=2)
     embeddings_2d = pca_2d.fit_transform(embeddings_norm)
 
@@ -100,7 +100,7 @@ def genera_grafico(embeddings_norm, labels, nome_grafico):
     else:
         print("Attenzione: Nessun cluster trovato con i parametri attuali (solo rumore).")
 
-    plt.title("Clustering Orchidee (DBSCAN + PCA)")
+    plt.title("Clustering Orchidee (DBSCAN)")
     plt.legend()
     plt.grid(True, linestyle='--', alpha=0.5)
 
@@ -181,7 +181,7 @@ def main(tag_gruppo="ALL_DATA"):
         nome_base = os.path.splitext(features_dati)[0]
         modello_tag = nome_base.replace("features_", "")
 
-    OUTPUT_ROOT = f"Clusters_Risultanti_{modello_tag}_{tag_gruppo}"
+    OUTPUT_ROOT = f"Clusters_Risultanti_{modello_tag}"
     if not os.path.exists(OUTPUT_ROOT):
         os.makedirs(OUTPUT_ROOT)
     FILE_OUTPUT = os.path.join(OUTPUT_ROOT, f"clustering_dbscan_{modello_tag}_{tag_gruppo}.xlsx")
@@ -192,15 +192,8 @@ def main(tag_gruppo="ALL_DATA"):
         data = np.load(features_dati)
         names = data["names"]
         embeddings_norm = normalize(data["embeddings"], norm='l2')
-        
-        print("Riduzione dimensionale con UMAP in corso (potrebbe richiedere qualche secondo)...")
-        embeddings_umap = umap.UMAP(
-            n_components=20,    
-            n_neighbors=15,     
-            min_dist=0.0,        
-            metric='cosine',      
-            random_state=42
-        ).fit_transform(embeddings_norm)
+        #pca = PCA(n_components=50) 
+        #embeddings_norm = pca.fit_transform(embeddings_norm)
         
     except FileNotFoundError:
         print(f"ERRORE: File '{features_dati}' non trovato. Hai effettuato l'estrazione per questo gruppo?")
@@ -220,9 +213,9 @@ def main(tag_gruppo="ALL_DATA"):
         scelta = input("\nCosa vuoi fare? ")
 
         if scelta == "1":
-            esegui_metodo_gomito(embeddings_umap)
+            esegui_metodo_gomito(embeddings_norm)
         elif scelta == "2":
-            labels, df_final = esegui_dbscan(embeddings_umap, names, FILE_OUTPUT)
+            labels, df_final = esegui_dbscan(embeddings_norm, names, FILE_OUTPUT)
         elif scelta == "3":
             genera_grafico(embeddings_norm, labels, NOME_GRAFICO)
         elif scelta == "4":

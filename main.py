@@ -10,10 +10,11 @@ import extractor_resnet_custom
 import dbscan_manager as dbscan 
 
 # --- CONFIGURAZIONE ---
-IMAGE_FOLDER = "../dataset" 
+IMAGE_FOLDER = "../dataset"
 EXCEL_FILE = "my_dataset.xlsx"
 
-CROPPED_FOLDER = "../dataset_cropped"
+CROPPED_FOLDER = "../dataset_new_cropper"
+DISCARD_FOLDER = "../dataset_discarded"
 
 def selezione_foto(excel_path=EXCEL_FILE):
     print("\nLettura dei filtri disponibili dal dataset...")
@@ -164,7 +165,7 @@ def main():
         scelta_principale = input("\nSeleziona fase: ")
 
         if scelta_principale == "0":
-            smart_cropper.run_smart_cropping(IMAGE_FOLDER, CROPPED_FOLDER, valid_names=nomi_validi)
+            smart_cropper.run_smart_cropping(IMAGE_FOLDER, CROPPED_FOLDER, DISCARD_FOLDER, valid_names=nomi_validi)
 
         elif scelta_principale == "1":
             menu_estrazione(nomi_validi, tag_gruppo)
