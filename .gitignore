@@ -4,6 +4,7 @@ vit/
 orchid/
 classificazione/
 models/
+features/
 *.npz
 .env
 *.pth
