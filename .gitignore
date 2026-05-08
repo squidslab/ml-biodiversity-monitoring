@@ -8,3 +8,4 @@ features/
 *.npz
 .env
 *.pth
+*.jpg

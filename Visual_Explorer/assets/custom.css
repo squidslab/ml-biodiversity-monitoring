@@ -1,0 +1,2 @@
+@keyframes spin { 100% { transform: rotate(360deg); } }
+.spin-emoji { animation: spin 1.2s linear infinite; font-size: 3.5rem; display: inline-block; }

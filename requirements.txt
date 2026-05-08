@@ -7,3 +7,6 @@ matplotlib
 openpyxl
 Pillow
 python-dotenv
+dash
+dash-bootstrap-components
+plotly
