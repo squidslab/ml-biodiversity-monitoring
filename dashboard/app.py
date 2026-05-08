@@ -136,29 +136,6 @@ def get_filtered_data(selected_list):
     idx_mask = mask.values
     return embeddings_norm[idx_mask], df_global[idx_mask].copy()
 
-
-# @app.callback(
-#     Output('gomito-plot', 'figure'),
-#     [Input('min-samples', 'value'),
-#      Input('filter-main', 'value')]
-# )
-# def update_gomito(min_s, selected_list):
-#     emb_filt, _ = get_filtered_data(selected_list)
-    
-#     if len(emb_filt) <= min_s:
-#         fig = px.line(title=f"⚠️ Punti insufficienti ({len(emb_filt)})")
-#         fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-#         return fig
-
-#     neighbors = NearestNeighbors(n_neighbors=min_s).fit(emb_filt)
-#     distances, _ = neighbors.kneighbors(emb_filt)
-#     distanze_ordinate = np.sort(distances[:, min_s-1])
-
-#     fig = px.line(x=range(len(distanze_ordinate)), y=distanze_ordinate)
-#     fig.update_layout(margin=dict(l=20, r=20, t=10, b=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-#     fig.update_traces(line_color='#7f4bc4', line_width=3)
-#     return fig
-
 @app.callback(
     Output('plot', 'figure'),
     [Input('eps', 'value'), Input('min-samples', 'value'),
