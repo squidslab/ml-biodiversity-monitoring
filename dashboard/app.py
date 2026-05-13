@@ -222,13 +222,16 @@ def sync_checklists(selected_values, options):
         return selected_values
 
     all_values = [opt['value'] for opt in options if opt['value'] != 'ALL']
-    if 'ALL' in selected_values and len(selected_values) < len(options):
-        return ['ALL'] + all_values
-    
-    if 'ALL' in selected_values and len(selected_values) == len(options):
-        if len(selected_values) <= len(all_values): 
-             return [v for v in selected_values if v != 'ALL']
 
+    if 'ALL' in selected_values and len(selected_values) == len(all_values):
+        return [v for v in selected_values if v != 'ALL']
+    
+    if 'ALL' in selected_values:
+        return ['ALL'] + all_values
+
+    if 'ALL' not in selected_values and all(v in selected_values for v in all_values):
+        return ['ALL'] + selected_values
+    
     if 'ALL' not in selected_values and len(selected_values) == len(all_values):
         return []
 
