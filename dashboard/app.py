@@ -1,5 +1,5 @@
 import dash
-from dash import dcc, html, Input, Output
+from dash import dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
@@ -50,6 +50,7 @@ except FileNotFoundError:
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
 
+# --- LAYOUT ---
 app.layout = dbc.Container([
     # Titolo e logo
     dbc.Row([
@@ -120,10 +121,9 @@ app.layout = dbc.Container([
         ], className="shadow-sm h-100"), width=4)
     ], className="mb-4 align-items-stretch")
     
-], fluid=True, style={'backgroundColor': "#D7FFCF", 'minHeight': '100vh', 'padding': '20px'}) 
+], fluid=True, style={'backgroundColor': "#EFEFEF", 'minHeight': '100vh', 'padding': '20px'}) 
 
 # --- FUNZIONI E CALLBACKS ---
-
 def get_filtered_data(selected_list):
     if not selected_list: 
         selected_list = []
@@ -161,7 +161,7 @@ def update_plot(eps, min_s, selected_list):
     
     for trace in fig.data:
         if trace.name == 'Rumore':
-            trace.marker.color = 'rgba(100, 100, 100, 0.15)'
+            trace.marker.color = 'rgba(100, 100, 100, 0.1)'
         else:
             trace.marker.opacity = 0.9
             
@@ -196,15 +196,12 @@ def update_table(eps, min_s, selected_list):
     if len(emb_filt) <= min_s:
         return html.P("Dati insufficienti per la tabella", className="text-muted text-center")
 
-    # Esegui DBSCAN per ottenere i cluster attuali
     labels = DBSCAN(eps=eps, min_samples=min_s).fit_predict(emb_filt)
     df_plot['Cluster'] = [f'C_{c}' if c != -1 else 'Rumore' for c in labels]
 
-    # Crea la tabella di conteggio con Pandas
-    # Righe: speciePredetta, Colonne: Cluster
     ct = pd.crosstab(df_plot['Specie Predetta'], df_plot['Cluster'])
     
-    # Trasforma la tabella Pandas in una tabella HTML di Dash Bootstrap
+    # Trasforma la tabella Pandas in una tabella HTML 
     return dbc.Table.from_dataframe(
         ct.reset_index(), 
         striped=True, 
@@ -214,5 +211,29 @@ def update_table(eps, min_s, selected_list):
         className="mb-0"
     )
 
+@app.callback(
+    Output('filter-main', 'value'),
+    [Input('filter-main', 'value')],
+    [State('filter-main', 'options')]
+)
+def sync_checklists(selected_values, options):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return selected_values
+
+    all_values = [opt['value'] for opt in options if opt['value'] != 'ALL']
+    if 'ALL' in selected_values and len(selected_values) < len(options):
+        return ['ALL'] + all_values
+    
+    if 'ALL' in selected_values and len(selected_values) == len(options):
+        if len(selected_values) <= len(all_values): 
+             return [v for v in selected_values if v != 'ALL']
+
+    if 'ALL' not in selected_values and len(selected_values) == len(all_values):
+        return []
+
+    return selected_values
+
+# --- SERVER RUN ---
 if __name__ == '__main__':
     app.run(debug=True)

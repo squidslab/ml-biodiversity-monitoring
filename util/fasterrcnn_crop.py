@@ -3,7 +3,7 @@ import torch
 import shutil
 import torchvision
 import torchvision.transforms.functional as F
-from PIL import Image, ImageOps
+from PIL import Image
 from dotenv import dotenv_values
 
 # --- CONFIGURAZIONE ---
@@ -27,7 +27,7 @@ def load_cropping_model():
         print(f"[!] ERRORE CARICAMENTO MODELLO DETECTOR: {e}")
         return None
 
-def process_single_crop(image: Image.Image, model, target_size=(256, 512)):
+def process_single_crop(image: Image.Image, model, target_size=(256, 512), device='cpu'):
     img_tensor = F.to_tensor(image).unsqueeze(0).to(device)
 
     with torch.no_grad():
@@ -35,11 +35,50 @@ def process_single_crop(image: Image.Image, model, target_size=(256, 512)):
 
     boxes = predictions['boxes'].cpu().numpy().astype(int).tolist()
     
-    if len(boxes) == 0:
+    x_min, y_min, x_max, y_max = 0, 0, 0, 0
+    found_box = False
+
+    if len(boxes) > 0:
+        x_min, y_min, x_max, y_max = boxes[0]
+        found_box = True
+    else:
+        # --- INIZIO FALLBACK: SLIDING WINDOW ---
+        # 1/6 dell'area totale
+        win_w = max(1, image.width // 2)
+        win_h = max(1, image.height // 3)
+        
+        # step (stride) pari alla metà della finestra per sovrapposizione
+        step_x = max(1, win_w // 2)
+        step_y = max(1, win_h // 2)
+
+        for y in range(0, image.height - win_h + 1, step_y):
+            for x in range(0, image.width - win_w + 1, step_x):
+                window_crop = image.crop((x, y, x + win_w, y + win_h))
+                win_tensor = F.to_tensor(window_crop).unsqueeze(0).to(device)
+
+                with torch.no_grad():
+                    win_preds = model(win_tensor)[0]
+
+                win_boxes = win_preds['boxes'].cpu().numpy().astype(int).tolist()
+                
+                if len(win_boxes) > 0:
+                    # è stato trovato un fiore nella sottofinestra
+                    lx_min, ly_min, lx_max, ly_max = win_boxes[0]
+                    
+                    x_min = lx_min + x
+                    y_min = ly_min + y
+                    x_max = lx_max + x
+                    y_max = ly_max + y
+                    
+                    found_box = True
+            
+            if found_box:
+                break 
+        # --- FINE FALLBACK ---
+
+    if not found_box:
         return None
 
-    x_min, y_min, x_max, y_max = boxes[0]
-    
     pw = int((x_max - x_min) * 0.10)
     ph = int((y_max - y_min) * 0.10)
     crop_coords = (
