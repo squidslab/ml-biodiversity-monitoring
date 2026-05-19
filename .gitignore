@@ -9,3 +9,5 @@ features/
 .env
 *.pth
 *.jpg
+*.jpeg
+*.png

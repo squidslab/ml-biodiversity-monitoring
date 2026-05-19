@@ -8,28 +8,54 @@ from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import normalize
 from sklearn.decomposition import PCA
 
-NPZ_FILE = 'features_resnet_custom_cropped_ALL_DATA.npz'
-EXCEL_FILE = 'dataset.xlsx'
+NPZ_FILE_TED = 'features_resnet_custom_cropped_ALL_DATA.npz'
+EXCEL_FILE_TED = 'dataset.xlsx'
 
-# --- PREPARAZIONE DATI ---
-data = np.load(NPZ_FILE)
-embeddings_norm = normalize(data['embeddings'], norm='l2')
-coords_3d = PCA(n_components=3).fit_transform(data['embeddings'])
+NPZ_FILE_TEST = 'features_resnet_custom_base_TEST.npz'
+EXCEL_FILE_TEST = 'Registro_Dataset_ResNet18.xlsx'
+
+# --- PREPARAZIONE DATI --- 
+data_ted = np.load(NPZ_FILE_TED)
+data_test_set = np.load(NPZ_FILE_TEST)
+emb_all = np.vstack((data_ted['embeddings'], data_test_set['embeddings']))
+names_all = np.concatenate((data_ted['names'], data_test_set['names']))
+
+embeddings_norm = normalize(emb_all, norm='l2')
+coords_3d = PCA(n_components=3).fit_transform(embeddings_norm)
 
 df_global = pd.DataFrame(coords_3d, columns=['x', 'y', 'z'])
-df_global['image name'] = data['names']
+df_global['image name'] = names_all
 
-ORDINE_CATEGORIE = ['Curated', 'Usable', 'Hardcore', 'Ruined Surface', 'Hands', 'Others']
+nomi_test = set(data_test_set['names'])
+df_global['is_test_set'] = df_global['image name'].apply(lambda x: x in nomi_test)
+
+ORDINE_CATEGORIE = ['Curated', 'Usable', 'Hardcore', 'Ruined Surface', 'Hands', 'Others', 'Test Set']
 
 try:
-    df_excel = pd.read_excel(EXCEL_FILE)
-    df_excel['datasetCategory'] = df_excel['datasetCategory'].fillna('Vuoto')
-    df_excel['personalAnnotation'] = df_excel['personalAnnotation'].fillna('Vuoto')
-    
-    df_global = df_global.merge(df_excel[['image name', 'datasetCategory', 'personalAnnotation', 'Specie Predetta']], on='image name', how='left')
+    df_excel_ted = pd.read_excel(EXCEL_FILE_TED)
+    df_excel_ted['datasetCategory'] = df_excel_ted['datasetCategory'].fillna('Vuoto')
+    df_excel_ted['personalAnnotation'] = df_excel_ted['personalAnnotation'].fillna('Vuoto')
+    df_ted_clean = df_excel_ted[['image name', 'datasetCategory', 'personalAnnotation', 'Specie Predetta']]
+
+    df_excel_test = pd.read_excel(EXCEL_FILE_TEST)
+    df_excel_test = df_excel_test.rename(columns={
+        'Classe': 'Specie Predetta',
+        'Nome File': 'image name' 
+    })
+    df_excel_test['Specie Predetta'] = 'test_' + df_excel_test['Specie Predetta'].astype(str)
+    df_excel_test['datasetCategory'] = 'Vuoto'
+    df_excel_test['personalAnnotation'] = 'Vuoto'
+    df_test_clean = df_excel_test[['image name', 'datasetCategory', 'personalAnnotation', 'Specie Predetta']]
+
+    df_excel_all = pd.concat([df_ted_clean, df_test_clean], ignore_index=True)
+
+    df_global = df_global.merge(df_excel_all, on='image name', how='left')
     df_global['Specie Predetta'] = df_global['Specie Predetta'].fillna('Non definita')
 
     def assegna_categoria_unificata(row):
+        if row['is_test_set']:
+            return 'Test Set'
+        
         cat = str(row['datasetCategory']).strip().upper()
         ann = str(row['personalAnnotation']).strip().lower()
         
@@ -44,11 +70,13 @@ try:
         
     df_global['UnifiedCategory'] = df_global.apply(assegna_categoria_unificata, axis=1)
 
-except FileNotFoundError:
-    print(f"ATTENZIONE: File '{EXCEL_FILE}' non trovato. Verranno usate etichette fittizie.")
-    df_global['UnifiedCategory'] = 'Tutte'
+except FileNotFoundError as e:
+    print(f"ATTENZIONE: File non trovato ({e}). Verranno usate etichette fittizie.")
+    df_global['UnifiedCategory'] = df_global['is_test_set'].apply(lambda x: 'Test Set' if x else 'Sconosciuta')
+    df_global['Specie Predetta'] = 'Non definita'
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
+app.title = "Orchid Visual Explorer"
 
 # --- LAYOUT ---
 app.layout = dbc.Container([
@@ -57,17 +85,17 @@ app.layout = dbc.Container([
         dbc.Col(
             html.Div([
                 html.Img(src=app.get_asset_url('logo.png'), height="60px", className="me-3"),
-                html.H2("Orchid Visual Explorer", className="text-primary mb-0 fw-bold")
-            ], className="d-flex justify-content-start align-items-center mt-3 mb-4"), 
+                html.H2("Orchid Visual Explorer", className="mb-0 fw-bold, text-center", style={'color': "#3C1C5A"})
+            ], className="d-flex justify-content-center align-items-center mt-3 mb-4"), 
             width=12
         )
-    ]),
+    ], style={'backgroundColor': "#d0feb1", 'width': '100%','borderRadius': '0px 0px 30px 30px', 'margin': '0', 'boxShadow': '0 2px 4px rgba(0,0,0,0.05)'}),
     
     dbc.Row([
         # Selezione Filtri
         dbc.Col(dbc.Card([
             dbc.CardBody([
-                html.H6("🔍 Filtra Dataset", className="text-secondary mb-4 fw-bold text-center"),
+                html.H6("🔍 Filtri Dataset", className="text-secondary mb-4 fw-bold text-center"),
                 html.Div([
                     dbc.Checklist(
                         id='filter-main',
@@ -77,7 +105,7 @@ app.layout = dbc.Container([
                         inline=False, 
                         className="mb-2"
                     )
-                ], className="d-flex flex-column justify-content-center", style={'padding': '10px', 'border': '1px solid #dee2e6', 'borderRadius': '5px', 'backgroundColor': '#f8f9fa', 'height': '100%', 'overflowY': 'auto'})
+                ], className="d-flex flex-column justify-content-flex-start", style={'padding': '10px', 'border': '1px solid #dee2e6', 'borderRadius': '5px', 'backgroundColor': '#f8f9fa', 'height': '100%', 'overflowY': 'auto'})
             ], className="d-flex flex-column h-100")
         ], className="shadow-sm h-100"), width=2),
 
@@ -99,11 +127,13 @@ app.layout = dbc.Container([
         dbc.Col(dbc.Card([
             dbc.CardBody([
                 html.H6("📊 Distribuzione Specie nei Cluster", className="text-secondary mb-3 fw-bold text-center"),
-                html.Div(id='tabella-cluster-container', style={'overflowX': 'auto', 'fontSize': '0.8rem'})
+                html.Div([
+                    html.Div(id='tabella-cluster-container', style={'overflowX': 'auto', 'fontSize': '0.8rem'})
+                ], className="d-flex flex-column justify-content-center h-100")
             ], className="d-flex flex-column h-100")
         ], className="shadow-sm h-100"), width=5)
         
-    ], className="mb-5 align-items-stretch", style={'minHeight': '38vh'}),
+    ], className="align-items-stretch", style={'minHeight': '38vh', 'padding': '20px'}),
     
     # RIGA INFERIORE: Mappa 3D + Immagine Hover
     dbc.Row([
@@ -119,9 +149,9 @@ app.layout = dbc.Container([
         dbc.Col(dbc.Card([
             dbc.CardBody(id='hover-info', className="d-flex flex-column align-items-center justify-content-center", style={'minHeight': '55vh'})
         ], className="shadow-sm h-100"), width=4)
-    ], className="mb-4 align-items-stretch")
+    ], className="align-items-stretch", style={'padding': '0px 20px 20px 20px'})
     
-], fluid=True, style={'backgroundColor': "#EFEFEF", 'minHeight': '100vh', 'padding': '20px'}) 
+], fluid=True, style={'backgroundColor': "#FEEDFD", 'minHeight': '100vh', 'paddingLeft': '0', 'paddingRight': '0'}) 
 
 # --- FUNZIONI E CALLBACKS ---
 def get_filtered_data(selected_list):
@@ -154,14 +184,25 @@ def update_plot(eps, min_s, selected_list):
     df_plot.sort_values('Cluster', inplace=True)
     
     color_map = {c: px.colors.qualitative.Plotly[i % 10] for i, c in enumerate(df_plot['Cluster'].unique()) if c != 'Rumore'}
-    color_map['Rumore'] = '#888888'
+    color_map['Rumore'] = "#000000"
     
-    fig = px.scatter_3d(df_plot, x='x', y='y', z='z', color='Cluster', custom_data=['image name'], color_discrete_map=color_map)
+    fig = px.scatter_3d(
+        df_plot, 
+        x='x', y='y', z='z', 
+        color='Cluster', 
+        hover_data={
+            'x': False, 'y': False, 'z': False, # Nasconde le coordinate 
+            'image name': False,
+            'Specie Predetta': True
+        },
+        custom_data=['image name'], 
+        color_discrete_map=color_map
+    )
     fig.update_traces(marker=dict(size=4, line=dict(width=0)))
     
     for trace in fig.data:
         if trace.name == 'Rumore':
-            trace.marker.color = 'rgba(100, 100, 100, 0.1)'
+            trace.marker.color = 'rgba(100, 100, 100, 0.8)'
         else:
             trace.marker.opacity = 0.9
             
