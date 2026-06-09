@@ -1,0 +1,30 @@
+.navbar .nav-link {
+    color: white !important;
+    transition: all 0.2s ease-in-out;
+}
+
+.navbar .nav-link:hover {
+    color: white !important;
+    text-decoration: none !important;
+    transition: all 0.2s ease-in-out;
+    transform: scale(1.08);
+    font-weight: 600;
+}
+
+.navbar .nav-link.active {
+    color: white !important;
+    text-decoration: underline !important;
+    transform: scale(1.08);    
+    font-weight: 600;
+    transition: all 0.2s ease-in-out;
+}
+
+.navbar .navbar-brand {
+    color: white !important;
+    transition: all 0.2s ease-in-out;
+}
+
+.navbar .navbar-brand:hover {
+    color: white !important;
+    text-decoration: none !important;
+}

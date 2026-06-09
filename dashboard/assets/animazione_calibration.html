@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animazione Clustering</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden; 
+        }
+        
+        #canvas-container {
+            width: 100%;
+            max-width: 800px;
+            height: 300px;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls {
+            width: 80%;
+            max-width: 600px;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .slider-label {
+            font-weight: bold;
+            color: #34495E;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        input[type=range] {
+            appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #2C3E50;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #E0E0E0;
+            border-radius: 3px;
+        }
+        
+        .slider-ticks {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10px;
+            margin-top: 5px;
+            color: #7F8C8D;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <canvas id="simCanvas"></canvas>
+    </div>
+
+    <div class="controls">
+        <input type="range" id="kSlider" min="1" max="5" value="1" step="0.01">
+        <div class="slider-ticks">
+            <span>|</span><span>|</span><span>|</span><span>|</span><span>|</span>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const slider = document.getElementById('kSlider');
+
+        let points = [];
+        const colors = ['#0091a6', '#25425B', '#A8D548']; 
+
+        function resize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            initData();
+            draw();
+        }
+
+        function randomGaussian(mean, stdev) {
+            let u = 1 - Math.random(); 
+            let v = Math.random();
+            let z = Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+            return z * stdev + mean;
+        }
+
+        // Calcola le posizioni "Sbagliate" (Inizio) e "Perfette" (Fine)
+        function initData() {
+            points = [];
+            const centers = [
+                {x: canvas.width * 0.25, y: canvas.height * 0.6},
+                {x: canvas.width * 0.50, y: canvas.height * 0.3},
+                {x: canvas.width * 0.75, y: canvas.height * 0.6}
+            ];
+
+            for(let i = 0; i < 150; i++) {
+                let group = i % 3;
+                
+                // Stato A (Slider a 1): Caos totale (sparsi ovunque)
+                let startX = Math.random() * (canvas.width - 40) + 20;
+                let startY = Math.random() * (canvas.height - 40) + 20;
+
+                // Stato B (Slider a 5): Raggruppati perfettamente nei loro centri
+                let spread = canvas.width * 0.05; 
+                let endX = randomGaussian(centers[group].x, spread);
+                let endY = randomGaussian(centers[group].y, spread);
+
+                points.push({ 
+                    group: group, 
+                    startX: startX, 
+                    startY: startY, 
+                    endX: endX, 
+                    endY: endY, 
+                    color: colors[group] 
+                });
+            }
+        }
+
+        // Disegna l'animazione in base alla posizione dello slider
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Convertiamo lo slider (1 -> 5) in un progresso (0 -> 1)
+            let val = parseFloat(slider.value);
+            let progress = (val - 1) / 4; 
+
+            // Applichiamo una curva "Ease-in-out" per rendere l'effetto magnetico più bello
+            let p = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
+
+            points.forEach(pt => {
+                // Interpolazione spaziale fluida
+                let x = pt.startX + (pt.endX - pt.startX) * p;
+                let y = pt.startY + (pt.endY - pt.startY) * p;
+
+                // Disegno del pallino
+                ctx.beginPath();
+                ctx.arc(x, y, 7, 0, Math.PI * 2);
+                ctx.fillStyle = pt.color;
+                ctx.fill();
+                // Bordo bianco per farli risaltare quando si sovrappongono
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            });
+        }
+
+        /* --- ANIMAZIONE AUTOMATICA ---
+        let isAutoPlaying = true;
+        let animationSpeed = 0.02; // Aumenta o diminuisci questo valore per cambiare la velocità
+
+        function autoPlay() {
+            if (!isAutoPlaying) return; // Si ferma se l'utente ha interagito
+
+            let val = parseFloat(slider.value);
+            val += animationSpeed;
+
+            if (val >= 5) {
+                val = 5;
+                isAutoPlaying = false; // Si ferma automaticamente arrivato alla fine (K=5)
+            }
+
+            slider.value = val;
+            draw();
+
+            // Richiama il prossimo frame dell'animazione
+            if (isAutoPlaying) {
+                requestAnimationFrame(autoPlay);
+            }
+        }
+
+        slider.addEventListener('mousedown', () => isAutoPlaying = false);
+        slider.addEventListener('touchstart', () => isAutoPlaying = false);  */
+
+        // Ascolta i movimenti del mouse
+        slider.addEventListener('input', draw);
+        window.addEventListener('resize', resize);
+        
+        // Avvio iniziale
+        resize();
+
+        // setTimeout(autoPlay, 1000);
+    </script>
+</body>
+</html>

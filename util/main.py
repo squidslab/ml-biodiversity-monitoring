@@ -10,11 +10,11 @@ import extractor_resnet_custom
 import dbscan_manager as dbscan 
 
 # --- CONFIGURAZIONE ---
-IMAGE_FOLDER = r"C:\Users\aless\OneDrive - Università di Napoli Federico II\OrchID\After_CROPPING\cropper_fallito"
+IMAGE_FOLDER = r"C:\Users\aless\OneDrive - Università di Napoli Federico II\OrchID\dataset"
 EXCEL_FILE = "my_dataset.xlsx"
 
-CROPPED_FOLDER = r"C:\Users\aless\OneDrive - Università di Napoli Federico II\OrchID\After_CROPPING\dataset_test_cropper"
-DISCARD_FOLDER = r"C:\Users\aless\OneDrive - Università di Napoli Federico II\OrchID\After_CROPPING\dataset_test_discarded"
+CROPPED_FOLDER = r"C:\Users\aless\OneDrive - Università di Napoli Federico II\OrchID\final_cropper"
+DISCARD_FOLDER = r"C:\Users\aless\OneDrive - Università di Napoli Federico II\OrchID\test_cropper_discarded"
 
 def selezione_foto(excel_path=EXCEL_FILE):
     print("\nLettura dei filtri disponibili dal dataset...")

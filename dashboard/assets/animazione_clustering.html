@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animazione Clustering - Da Grigio a Colore</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden; 
+        }
+        
+        #canvas-container {
+            width: 100%;
+            max-width: 800px;
+            height: 300px;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls {
+            width: 80%;
+            max-width: 600px;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        input[type=range] {
+            appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #2C3E50;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #E0E0E0;
+            border-radius: 3px;
+        }
+        
+        .slider-ticks {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10px;
+            margin-top: 5px;
+            color: #7F8C8D;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <canvas id="simCanvas"></canvas>
+    </div>
+
+    <div class="controls">
+        <input type="range" id="kSlider" min="1" max="5" value="1" step="0.01">
+        <div class="slider-ticks">
+            <span>|</span><span>|</span><span>|</span><span>|</span><span>|</span>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const slider = document.getElementById('kSlider');
+
+        let points = [];
+        
+        // Colori in formato RGB per permettere l'interpolazione matematica
+        const targetColorsRgb = [
+            {r: 244, g: 162, b: 97},  
+            {r: 231, g: 111, b: 81},   
+            {r: 233, g: 196, b: 106}   
+        ];
+        
+        // Il grigio di partenza per tutti i pallini
+        const startColor = {r: 180, g: 180, b: 180}; 
+
+        function resize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            initData();
+            draw();
+        }
+
+        function randomGaussian(mean, stdev) {
+            let u = 1 - Math.random(); 
+            let v = Math.random();
+            let z = Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+            return z * stdev + mean;
+        }
+
+        function initData() {
+            points = [];
+            const centers = [
+                {x: canvas.width * 0.25, y: canvas.height * 0.6},
+                {x: canvas.width * 0.50, y: canvas.height * 0.3},
+                {x: canvas.width * 0.75, y: canvas.height * 0.6}
+            ];
+
+            for(let i = 0; i < 150; i++) {
+                let group = i % 3;
+                
+                let startX = Math.random() * (canvas.width - 40) + 20;
+                let startY = Math.random() * (canvas.height - 40) + 20;
+
+                let spread = canvas.width * 0.05; 
+                let endX = randomGaussian(centers[group].x, spread);
+                let endY = randomGaussian(centers[group].y, spread);
+
+                points.push({ 
+                    group: group, 
+                    startX: startX, 
+                    startY: startY, 
+                    endX: endX, 
+                    endY: endY, 
+                    targetRgb: targetColorsRgb[group] // Salviamo il colore di destinazione
+                });
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            let val = parseFloat(slider.value);
+            let progress = (val - 1) / 4; 
+            let p = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
+
+            points.forEach(pt => {
+                // Interpolazione Posizione
+                let x = pt.startX + (pt.endX - pt.startX) * p;
+                let y = pt.startY + (pt.endY - pt.startY) * p;
+
+                // Interpolazione Colore (da startColor a targetRgb)
+                let r = Math.round(startColor.r + (pt.targetRgb.r - startColor.r) * p);
+                let g = Math.round(startColor.g + (pt.targetRgb.g - startColor.g) * p);
+                let b = Math.round(startColor.b + (pt.targetRgb.b - startColor.b) * p);
+
+                ctx.beginPath();
+                ctx.arc(x, y, 7, 0, Math.PI * 2);
+                ctx.fillStyle = `rgb(${r}, ${g}, ${b})`; // Applica il colore calcolato
+                ctx.fill();
+                
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            });
+        }
+        
+        slider.addEventListener('input', draw);
+        window.addEventListener('resize', resize);
+        
+        resize();
+    </script>
+</body>
+</html>

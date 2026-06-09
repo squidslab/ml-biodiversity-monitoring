@@ -34,18 +34,35 @@ def process_single_crop(image: Image.Image, model, target_size=(256, 512), devic
         predictions = model(img_tensor)[0]
 
     boxes = predictions['boxes'].cpu().numpy().astype(int).tolist()
+    scores = predictions['scores'].cpu().numpy().tolist()
     
     x_min, y_min, x_max, y_max = 0, 0, 0, 0
     found_box = False
 
     if len(boxes) > 0:
-        x_min, y_min, x_max, y_max = boxes[0]
         found_box = True
+
+        if len(boxes) == 1:
+            x_min, y_min, x_max, y_max = boxes[0]
+        else:
+            box1, box2 = boxes[0], boxes[1]
+            score1, score2 = scores[0], scores[1]
+            
+            # micro-tolleranza 
+            if abs(score1 - score2) < 0.01:
+                area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+                area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+                if area2 > area1:
+                    x_min, y_min, x_max, y_max = box2
+                else:
+                    x_min, y_min, x_max, y_max = box1
+            else:
+                x_min, y_min, x_max, y_max = box1
     else:
         # --- INIZIO FALLBACK: SLIDING WINDOW ---
         # 1/6 dell'area totale
         win_w = max(1, image.width // 2)
-        win_h = max(1, image.height // 3)
+        win_h = max(1, image.height // 4)
         
         # step (stride) pari alla metà della finestra per sovrapposizione
         step_x = max(1, win_w // 2)
