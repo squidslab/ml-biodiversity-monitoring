@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import os
 import dash
 import plotly.express as px
 import dash_bootstrap_components as dbc
@@ -124,17 +125,28 @@ def genera_tabella_crosstab(df_plot):
 
 def calcola_percorso_hover(hoverData):
     """
-    Estrae il nome dell'immagine dall'hoverData di Plotly
-    e genera il percorso corretto per Dash.
+    Estrae il nome dell'immagine dall'hoverData di Plotly,
+    controlla dinamicamente in quale sottocartella si trova (labeled o unlabeled)
+    e restituisce il percorso corretto per Dash.
     """
     if hoverData is None:
-        return "", "Passa il mouse su un punto"
+        return "", "Move the mouse over a point."
 
     nome_immagine = hoverData['points'][0]['customdata'][1]
+    quella_pagina = os.path.dirname(os.path.abspath(__file__))
+    radice_progetto = os.path.dirname(quella_pagina)
     
-    percorso_immagine = dash.get_asset_url(nome_immagine)
+    percorso_controllo_labeled = os.path.join(radice_progetto, "dashboard", "assets", "labeled_images", nome_immagine)
     
-    return percorso_immagine, f"File: {nome_immagine}"
+    if os.path.exists(percorso_controllo_labeled):
+        sottocartella = "labeled_images"
+        tag_stato = "labeled"
+    else:
+        sottocartella = "unlabeled_images"
+        tag_stato = "UNlabeled"
+        
+    percorso_immagine = dash.get_asset_url(f"{sottocartella}/{nome_immagine}")
+    return percorso_immagine, f"[{tag_stato}] File: {nome_immagine}"
 
 # ==========================================
 # 4. ESECUZIONE AL CARICAMENTO (Cache)

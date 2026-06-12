@@ -13,12 +13,11 @@ from utils import EMBEDDINGS_GLOBALI, DF_GLOBALE, genera_grafico_3d, genera_tabe
 
 dash.register_page(__name__, path='/spectral', name='Spectral Clustering')
 
-ORDINE_CATEGORIE = ['Curated', 'Usable', 'Hardcore', 'Ruined Surface', 'Hands', 'Others', 'Labeled Set']
+ORDINE_CATEGORIE = ['Labeled Set', 'Curated', 'Usable', 'Hardcore', 'Ruined Surface', 'Hands', 'Others']
 
 # ==========================================
 # PREPARAZIONE DATI INIZIALI
 # ==========================================
-# Labeled Set 
 maschera_test = DF_GLOBALE['is_test_set'] == True
 X_labeled = EMBEDDINGS_GLOBALI[maschera_test]
 df_labeled = DF_GLOBALE[maschera_test].copy()
@@ -27,173 +26,259 @@ df_labeled = DF_GLOBALE[maschera_test].copy()
 # LAYOUT
 # ==========================================
 layout = html.Div([
-    html.H2("Spectral Clustering", className="mb-3", style={"color": "#430783"}),
-    html.Hr(),
+    html.Div([
+        dbc.Row([
+        
+            dbc.Col([
+                dbc.Card([
+                    html.P([
+                        html.Span("💡 How it works: ", className="fw-bold text-primary", style={"color": "#2E4C66"}),
+                        html.Span("This algorithm treats the dataset as a connected network (graph), " \
+                        "where specimens are nodes and the links between them represent their degree of " \
+                        "similarity. It then identifies the optimal cuts to divide the network into a " \
+                        "predefined number of distinct groups.", className="text-muted")
+                    ], className="mb-0 text-center") 
+                ], className="shadow-sm border-0 rounded-3 h-100 card-custom-sx p-4"),
+                
+            ], width=12, lg=5, className="mb-3 mb-lg-0"),
+
+            # SECONDA COLONNA
+            dbc.Col([
+                dbc.Card([
+                    html.P([
+                        html.Span("🎯 When to use it: ", className="fw-bold text-primary", style={"color": "#2E4C66"}),
+                        html.Span("It is highly effective for identifying complex, non-spherical botanical structures or when specimens are linked by continuous evolutionary transitions. " \
+                        "However it is best suited when there is a strong taxonomic hypothesis regarding the number of species present in the dataset.", className="text-muted")
+                    ], className="mb-0 text-center") 
+                ], className="shadow-sm border-0 rounded-3 h-100 card-custom-sx p-4"),
+
+            ], width=12, lg=5, className="mb-3 mb-lg-0"),
+
+        ], justify="center", className="text-secondary p-4", style={"fontSize": "0.95rem", "lineHeight": "1.6"})     
+    ], className="mb-2"),
+
+    html.Hr(className="mb-5 text-muted"),
     
     # ---------------------------------------------------------
-    # FASE 1: LABELED SET
+    # STEP 1: LABELED SET
     # ---------------------------------------------------------
-    html.H4("Fase 1: Calibrazione su un Labeled Set", className="mb-3"),
+    html.Div([
+        html.H3([
+            html.I(className="bi bi-gear-fill me-2 text-primary"), 
+            "Step 1: Tool Calibration on Labeled Data"
+        ], className="mb-4 fw-bold step-title"),
+    ], className="d-flex align-items-center"),
+
     dbc.Row([
+        # COLUMN 1: PARAMETERS (Left)
         dbc.Col([
             dbc.Card([
-                # Selezione parametri Labelded 
-                dbc.CardHeader("⚙️ Parametri Spectral Clustering", className="fw-bold", style={"backgroundColor": "#C499F9"}),
+                dbc.CardHeader(
+                    html.H6("Algorithm Parameters", className="mb-0 fw-bold text-uppercase text-muted", style={"letterSpacing": "1px"}), 
+                    className="bg-transparent border-bottom-0 pt-4 pb-0"
+                ),
                 dbc.CardBody([
-                    html.Label("Numero di Cluster:", className="fw-bold"),
-                    html.Br(),
-                    dcc.Slider(id='spectral-slider-clusters', min=2, max=10, step=1, value=6, marks={i: str(i) for i in range(2, 11)}, className="mb-4", tooltip={"always_visible": False}),
-                    
+
+                    # Clusters Slider
                     html.Div([
-                        html.Label("Numero di Vicini:", className="fw-bold mt-3"),
-                        dbc.Button("✨ Auto", id="btn-opt-neighbors-lab", size="sm", color="warning", outline=True, className="float-end mt-2")
-                    ], className="d-flex justify-content-between align-items-center mt-3"),
-                    dcc.Slider(id='spectral-slider-neighbors', min=2, max=20, step=1, value=5, marks={i: str(i) for i in range(2, 21, 2)}, className="mb-4", tooltip={"always_visible": False}),
+                        html.Label("Number of Clusters", className="fw-bold text-primary mb-2"),
+                        html.Div(
+                            "Must match the number of species (already calibrated for the pre-loaded dataset).", 
+                            className="text-muted small mb-3"
+                        ),
+                        dcc.Slider(id='spectral-slider-clusters',min=2, max=10, step=1, value=6, marks={i: str(i) for i in range(2, 11)}, className="mb-4 force-blue-slider", tooltip={"always_visible": False, "placement": "bottom"},),
+                    ], className="custom-slider-box mb-4"),
                     
-                    html.Hr(),
-                    html.Div(id='spectral-metriche-box', className="mt-3"),
+                    # Neighbors Slider 
+                    html.Div([
+                        html.Div([
+                            html.Label("Number of Neighbors", className="fw-bold text-primary mb-0"),
+                            dbc.Button("Optimize ✨", id="btn-opt-neighbors-lab", size="sm", color="warning", outline=True, className="auto-tune-btn rounded-pill px-3 py-1 fw-bold"),
+                        ], className="d-flex justify-content-between align-items-center mb-2"), 
+                        
+                        html.Div(
+                            "Defines the local neighborhood size for specimen connectivity.", 
+                            className="text-muted small mb-3"
+                        ),
+
+                        dcc.Slider(id='spectral-slider-neighbors', min=4, max=30, step=1, value=12, marks={i: str(i) for i in range(2, 31, 4)}, className="mb-4 force-blue-slider", tooltip={"always_visible": False, "placement": "bottom"}),
+
+                    ], className="custom-slider-box mb-4"),
+
+                    # Metrics Container
+                    html.Div([
+                        html.Div(id='spectral-metriche-box')
+                    ]),
+                    
                     dcc.Store(id='store-top5-labeled', data=[])
-                ])
-            ], className="shadow-sm border-0 h-100")
-        ], width=3),
+                ], className="p-4") 
+            ], className="shadow-sm border-0 h-100 rounded-3")
+        ], width=12, lg=3, className="mb-4 mb-lg-0"), 
         
+        # COLUMN 2: VISUALIZATION & PREVIEW (Right)
         dbc.Col([
             dbc.Row([
-                # Grafico 3D Labeled 
+                # 3D Graph
                 dbc.Col(
                     dbc.Card(
-                        dbc.CardBody(
-                            dcc.Graph(id='spectral-grafico-3d', style={'height': '420px'}, clear_on_unhover=True),
-                            className="p-0" 
-                        ), 
-                        style={'height': '420px'},
-                        className="shadow-sm border-0"
+                        dbc.CardBody([
+                            html.H6("Latent Space Visualization", className="fw-bold text-muted mb-3 px-3 pt-2 text-uppercase", style={"letterSpacing": "1px"}),
+                            dcc.Graph(id='spectral-grafico-3d', style={'height': '380px'}, clear_on_unhover=True),
+                        ], className="p-2"), 
+                        style={'height': '460px'},
+                        className="shadow-sm border-0 rounded-3 mb-4 mb-xl-0"
                     ),
-                    width=9
+                    width=12, xl=8
                 ),
                 
-                # Box Immagine Hover Labeled 
+                # Image Preview Hover
                 dbc.Col(
                     dbc.Card([
-                        dbc.CardHeader("Preview", className="text-center fw-bold", style={"backgroundColor": "#C499F9", "fontSize": "12px", "height": "40px", "padding": "8px"}),
                         dbc.CardBody([
-                            html.H6(id='spectral-hover-text', className="text-center text-secondary mb-2", style={'fontSize': '11px', 'height': '15px'}),
-                        
-                            html.Img(
-                                id='spectral-hover-image', 
-                                style={
-                                    'maxWidth': '100%', 
-                                    'maxHeight': '330px',    
-                                    'objectFit': 'contain', 
-                                    'borderRadius': '5px'
-                                }
-                            )
-                        ], className="d-flex flex-column align-items-center justify-content-center", style={'height': '380px'}) 
-                    ], style={'height': '420px'}, className="shadow-sm border-0"),
-                    width=3
+                            html.H6("Specimen Preview", className="fw-bold text-muted mb-3 text-uppercase text-center", style={"letterSpacing": "1px"}),
+                            html.Div([
+                                html.H6(id='spectral-hover-text', className="text-center text-secondary mb-2", style={'fontSize': '12px', 'minHeight': '18px'}),
+                                html.Img(
+                                    id='spectral-hover-image', 
+                                    style={
+                                        'maxWidth': '100%', 
+                                        'maxHeight': '320px',    
+                                        'objectFit': 'contain', 
+                                        'borderRadius': '8px' # Softer corners for the image
+                                    }
+                                )
+                            ], className="d-flex flex-column align-items-center justify-content-center h-100") 
+                        ], className="p-4") 
+                    ], style={'height': '460px'}, className="shadow-sm border-0 rounded-3"), 
+                    width=12, xl=4
                 )
-            ], className="border-0 mb-3 align-items-stretch"),
+            ], className="mb-4"),
             
-            # Tabella Distribuzione Labeled
+            # Crosstab Table
             dbc.Row([
                 dbc.Col(
                     dbc.Card([
-                        dbc.CardHeader("Matrice di Distribuzione (Labeled Set)", className="fw-bold", style={"backgroundColor": "#C499F9"}),
-                        dbc.CardBody(id='spectral-tabella-crosstab')
-                    ], className="shadow-sm border-0")
+                        dbc.CardHeader(
+                            html.H6("Distribution Matrix (Labeled Set)", className="fw-bold text-muted mb-3 px-3 pt-2 text-uppercase", style={"letterSpacing": "1px"}), 
+                            className="bg-transparent border-bottom-0 pt-4 pb-0"
+                        ),
+                        dbc.CardBody(id='spectral-tabella-crosstab', className="p-4")
+                    ], className="shadow-sm border-0 rounded-3")
                 )
             ])
-        ], width=9)
+        ], width=12, lg=9)
     ]),
+
 
     html.Hr(className="my-5"),
 
     # ---------------------------------------------------------
     # FASE 2: UNLEABLED SET
     # ---------------------------------------------------------
-    html.H4("Fase 2: Applicazione dei parametri su un Unlabeled Set", className="mb-3"),
+    html.Div([
+        html.H3([
+            html.I(className="bi bi-robot me-2 text-primary"), 
+            "Step 2: Analyzing Unlabeled Data"
+        ], className="mb-4 fw-bold step-title"),
+    ], className="d-flex align-items-center mt-5"),
+
     dbc.Row([
+        # COLUMN 1: PARAMETERS (Left)
         dbc.Col([
             dbc.Card([
-                # Selezione parametri Unlabeled 
-                dbc.CardHeader("⚙️ Parametri Spectral Clustering", className="fw-bold", style={"backgroundColor": "#C499F9"}),
+                dbc.CardHeader(
+                    html.H6("Algorithm Parameters", className="mb-0 fw-bold text-uppercase text-muted", style={"letterSpacing": "1px"}), 
+                    className="bg-transparent border-bottom-0 pt-4 pb-0"
+                ),
                 dbc.CardBody([
-                    dbc.Button("🔄 Usa parametri Labeled Set", id="btn-sync-params", color="success", outline=True, className="w-100 mb-4 shadow-sm"),
+                    dbc.Button("Import Parameters", id="btn-sync-params", color="success", outline=True, className="sync-btn w-100 mb-2 rounded-pill shadow-sm fw-bold"),
+                    html.Div(
+                        "Syncs your values with the ones calibrated in Step 1", 
+                        className="text-muted small text-center mb-4"
+                    ),
                     
+                    # Clusters Slider
                     html.Div([
-                        html.Label("Numero di Cluster:", className="fw-bold"),
-                        dbc.Button("✨ Auto", id="btn-opt-clusters-ted", size="sm", color="warning", outline=True, className="float-end")
-                    ], className="d-flex justify-content-between align-items-center mt-3"),
-                    dcc.Slider(id='ted-slider-clusters', min=2, max=10, step=1, value=4, marks={i: str(i) for i in range(2, 11)}, className="mb-4", tooltip={"always_visible": False}),
+                        html.Div([
+                            html.Label("Number of Clusters", className="fw-bold text-primary mb-0"),
+                            dbc.Button("Optimize ✨", id="btn-opt-clusters-ted", size="sm", color="warning", outline=True, className="auto-tune-btn rounded-pill px-3 py-1 fw-bold"),
+                        ], className="d-flex justify-content-between align-items-center mb-2"),
+                        html.Div("Adjust to match expected species diversity.", className="text-muted small mb-3"),
+                        dcc.Slider(id='ted-slider-clusters', min=2, max=10, step=1, value=4, marks={i: str(i) for i in range(2, 11)}, className="mb-4 force-blue-slider", tooltip={"always_visible": False, "placement": "bottom"}),
+                    ], className="custom-slider-box mb-4"),
                     
-                    html.Label("Numero di Vicini:", className="fw-bold"),
-                    dcc.Slider(id='ted-slider-neighbors', min=2, max=30, step=1, value=5, marks={i: str(i) for i in range(2, 31, 4)}, className="mb-4", tooltip={"always_visible": False}),
+                    # Neighbors Slider
+                    html.Div([
+                        html.Label("Number of Neighbors", className="fw-bold text-primary mb-2"),
+                        html.Div("Defines the local neighborhood size for specimen connectivity.", className="text-muted small mb-3"),
+                        dcc.Slider(id='ted-slider-neighbors', min=4, max=30, step=1, value=5, marks={i: str(i) for i in range(2, 31, 4)}, className="mb-4 force-blue-slider", tooltip={"always_visible": False, "placement": "bottom"}),
+                    ], className="custom-slider-box mb-4"),
                     
                     html.Hr(),
-                    html.Div(id='ted-metriche-box', className="mt-3")
-                ])
-            ], className="shadow-sm border-0 h-auto mb-3"),
-            dbc.Card([
-                dbc.CardHeader("🔍 Filtri Dataset", className="fw-bold", style={"backgroundColor": "#C499F9"}),
-                dbc.CardBody([
-                    
-                    html.Div([
-                        dbc.Checklist(
-                            id='filter-main',
-                            options=[{'label': 'Seleziona Tutti', 'value': 'ALL'}] + [{'label': c, 'value': c} for c in ORDINE_CATEGORIE],
-                            value=['Curated'], 
-                            inline=False, 
-                            className="mb-2"
-                        )
-                    ], className="d-flex flex-column justify-content-flex-start", style={'padding': '10px', 'border': '1px solid #dee2e6', 'borderRadius': '5px', 'height': '100%', 'overflowY': 'auto'})
-                ], className="d-flex flex-column h-100")
-            ], className="shadow-sm h-auto border-0")
-        ], className="border-0 mb-3 align-items-stretch",width=3),
+                    html.Div(id='ted-metriche-box')
+                ], className="p-4")
+            ], className="shadow-sm border-0 rounded-3 mb-4"),
 
+            # Filter Card
+            dbc.Card([
+                dbc.CardHeader(
+                    html.H6("Dataset Filters", className="mb-0 fw-bold text-uppercase text-muted", style={"letterSpacing": "1px"}), 
+                    className="bg-transparent border-bottom-0 pt-4 pb-0"
+                ),
+                dbc.CardBody([
+                    dbc.Checklist(
+                        id='filter-main',
+                        options=[{'label': 'Select All', 'value': 'ALL'}] + [{'label': c, 'value': c} for c in ORDINE_CATEGORIE],
+                        value=['Curated'], 
+                        className="mb-2"
+                    )
+                ], className="p-4")
+            ], className="shadow-sm border-0 rounded-3")
+        ], width=12, lg=3, className="mb-4 mb-lg-0"),
+
+        # COLUMN 2: VISUALIZATION & PREVIEW (Right)
         dbc.Col([
             dbc.Row([
-                # Grafico 3D Unlabeled
+                # 3D Graph
                 dbc.Col(
                     dbc.Card(
-                        dbc.CardBody(
-                            dcc.Graph(id='ted-grafico-3d', style={'height': '420px'}, clear_on_unhover=True),
-                            className="p-0"
-                        ), 
-                        style={'height': '420px'},
-                        className="shadow-sm border-0"
-                    ), 
-                    width=9
+                        dbc.CardBody([
+                            html.H6("Latent Space Visualization", className="fw-bold text-muted mb-3 px-3 pt-2 text-uppercase", style={"letterSpacing": "1px"}),
+                            dcc.Graph(id='ted-grafico-3d', style={'height': '380px'}, clear_on_unhover=True),
+                        ], className="p-2"), 
+                        style={'height': '460px'},
+                        className="shadow-sm border-0 rounded-3 mb-4"
+                    ),
+                    width=12, xl=8
                 ),
-                # Box Immagine Hover Unlabeled
+                # Image Preview
                 dbc.Col(
                     dbc.Card([
-                        dbc.CardHeader("Preview", className="text-center fw-bold", style={"backgroundColor": "#C499F9", "fontSize": "12px", "height": "40px", "padding": "8px"}),
                         dbc.CardBody([
-                            html.H6(id='ted-hover-text', className="text-center text-secondary mb-2", style={'fontSize': '11px'}),
-                            
-                            html.Img(
-                                id='ted-hover-image', 
-                                style={
-                                    'maxWidth': '100%', 
-                                    'maxHeight': '330px',    
-                                    'objectFit': 'contain', 
-                                    'borderRadius': '5px'
-                                }
-                            )
-                        ], className="d-flex flex-column align-items-center justify-content-center", style={'height': '380px'}) 
-                    ], style={'height': '420px'}, className="shadow-sm border-0"),
-                    width=3
+                            html.H6("Specimen Preview", className="fw-bold text-muted mb-3 text-uppercase text-center", style={"letterSpacing": "1px"}),
+                            html.Div([
+                                html.H6(id='ted-hover-text', className="text-center text-secondary mb-2", style={'fontSize': '12px', 'minHeight': '18px'}),
+                                html.Img(id='ted-hover-image', style={'maxWidth': '100%', 'maxHeight': '320px', 'objectFit': 'contain', 'borderRadius': '8px'})
+                            ], className="d-flex flex-column align-items-center justify-content-center h-100")
+                        ], className="p-4")
+                    ], style={'height': '460px'}, className="shadow-sm border-0 rounded-3"),
+                    width=12, xl=4
                 )
-            ], className="border-0 mb-3 align-items-stretch"),
-
-            # Tabella Distribuzione Unlabeled
+            ]),
+            
+            # Distribution Matrix
             dbc.Row([
-                dbc.Col(dbc.Card([
-                    dbc.CardHeader("Matrice di Distribuzione (Unlabeled Set)", className="fw-bold", style={"backgroundColor": "#C499F9"}),
-                    dbc.CardBody(id='ted-tabella-crosstab')
-                ], className="shadow-sm border-0"))
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardHeader(
+                            html.H6("Distribution Matrix (Unlabeled Set)", className="fw-bold text-muted mb-3 px-3 pt-2 text-uppercase", style={"letterSpacing": "1px"}),
+                            className="bg-transparent border-bottom-0 pt-4 pb-0"
+                        ),
+                        dbc.CardBody(id='ted-tabella-crosstab', className="p-4")
+                    ], className="shadow-sm border-0 rounded-3")
+                )
             ])
-        ], width=9)
+        ], width=12, lg=9)
     ])
 ], className="mb-5")
 
@@ -202,7 +287,7 @@ layout = html.Div([
 # CALLBACKS
 # ==========================================
 
-# Labeled Set: Aggiornamento Grafico, Tabella e Metriche
+# Labeled Set: Update 3d visualization, distribution matrix and validation metrics
 # ==========================================
 @callback(
     [Output('spectral-grafico-3d', 'figure'), 
@@ -221,24 +306,25 @@ def aggiorna_spectral_labeled(n_clusters, n_neighbors, top5_data):
     df_plot = df_labeled.copy()
     df_plot['Cluster'] = labels.astype(str)
     
-    fig = genera_grafico_3d(df_plot, "Labeled Set")
+    fig = genera_grafico_3d(df_plot, "")
     tabella = genera_tabella_crosstab(df_plot) 
     
     ami = adjusted_mutual_info_score(df_plot['Specie Predetta'], labels)
     ari = adjusted_rand_score(df_plot['Specie Predetta'], labels)
     
     elementi_box = [
-        html.H6("Metriche Labeled:", className="text-success fw-bold"), 
+        html.Hr(className="mb-4"),
+        html.H6("Validation Metrics", className="fw-bold text-muted mb-3 text-uppercase", style={"letterSpacing": "1px"}),
         html.P(f"AMI Score: {ami:.4f}", className="mb-1"),
         html.P(f"ARI Score: {ari:.4f}", className="mb-1")
     ]
     
     if top5_data and n_neighbors == top5_data[0]['vicini'] and n_clusters == top5_data[0].get('k_clusters'):
-        elementi_box.append(html.Hr(className="my-2"))
-        elementi_box.append(html.H6("🏆 Valori Migliori:", className="text-info fw-bold mt-2", style={'fontSize': '13px'}))
+        elementi_box.append(html.Hr(className="mb-4"))
+        elementi_box.append(html.H6("Best Values:", className="mb-2 fw-bold text-uppercase text-muted", style={"letterSpacing": "1px"}))
         for res in top5_data:
             elementi_box.append(
-                html.P(f"Vicini: {res['vicini']} | AMI: {res['ami']:.3f} | ARI: {res['ari']:.3f}", 
+                html.P(f"Neighbors: {res['vicini']} | AMI: {res['ami']:.3f} | ARI: {res['ari']:.3f}", 
                        className="mb-0 text-muted", style={'fontSize': '12px'})
             )
     
@@ -246,7 +332,7 @@ def aggiorna_spectral_labeled(n_clusters, n_neighbors, top5_data):
     
     return fig, tabella, box
 
-# Labeled Set: Calcolo miglior valore num di vicini
+# Labeled Set: AUTO number of neighbors
 # ==========================================
 @callback(
     [Output('spectral-slider-neighbors', 'value', allow_duplicate=True),
@@ -263,7 +349,7 @@ def auto_ottimizza_vicini_labeled(n_clicks, k_clusters):
     best_score = -1
     best_vicini = 5
     
-    for vicini in range(2, 21):
+    for vicini in range(4, 30):
         grafo = kneighbors_graph(X_labeled, n_neighbors=vicini, metric='cosine', mode='connectivity', include_self=True)
         grafo = 0.5 * (grafo + grafo.T) 
         
@@ -329,7 +415,7 @@ def aggiorna_spectral_ted(categorie, n_clusters, n_neighbors):
         score = 0
 
     metriche = html.Div([
-        html.H6(f"Immagini analizzate: {len(X_ted)}", className="text-secondary fw-bold"),
+        html.H6(f"Number of samples: {len(X_ted)}", className="text-secondary fw-bold"),
         html.P(f"Silhouette Score: {score:.4f}", className="text-success fw-bold")
     ])
     

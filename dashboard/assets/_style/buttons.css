@@ -1,0 +1,83 @@
+.sync-btn {
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+    background-color: white !important;
+    color: #0091a6 !important; 
+    border-color: #0091a6 !important;
+}
+
+.sync-btn:hover {
+    transform: scale(1.1) !important; 
+    background-color: #0091a6 !important;
+    color: white !important; 
+    border-color: #0091a6 !important;
+    box-shadow: 0 5px 25px rgba(7, 210, 255, 0.5) !important; 
+    cursor: pointer;
+}
+
+.sync-btn:active {
+    transform: scale(0.92) !important; 
+    box-shadow: 0 10px 25px rgba(7, 210, 255, 0.5) !important; 
+}
+
+.auto-tune-btn {
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+}
+
+.auto-tune-btn:hover {
+    transform: scale(1.1)  !important; 
+    background-color: #ffc107 !important;
+    color: white !important; 
+    border-color: #ffc107 !important;
+    box-shadow: 0 5px 25px rgba(255, 193, 7, 0.5) !important; 
+    cursor: pointer;
+}
+
+.auto-tune-btn:active {
+    transform: scale(0.92) !important; 
+    box-shadow: 0 2px 10px rgba(255, 193, 7, 0.3) !important;
+}
+
+.magic-btn {
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+}
+
+.magic-btn:hover {
+    transform: scale(1.1) rotate(-3deg) !important; 
+    background-color: #ffc107 !important;
+    color: white !important; 
+    border-color: #ffc107 !important;
+    box-shadow: 0 10px 25px rgba(255, 193, 7, 0.5) !important; 
+    cursor: pointer;
+}
+
+.magic-btn:active {
+    transform: scale(0.92) !important; 
+    box-shadow: 0 2px 10px rgba(255, 193, 7, 0.3) !important;
+}
+
+.sparkle-element {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background-color: #ffc107; 
+    border-radius: 50%; 
+    pointer-events: none; 
+    opacity: 0;
+    z-index: 999;
+}
+.sparkle-element.star {
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+    border-radius: 0;
+    width: 8px;
+    height: 8px;
+}
+@keyframes explodeAndFade {
+    0% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(var(--target-x), var(--target-y)) scale(0);
+        opacity: 0;
+    }
+}

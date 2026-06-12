@@ -43,7 +43,7 @@ layout = dbc.Container([
                         dbc.Col([
                             html.Div([
                                 html.Iframe(
-                                    src="/assets/animazione_calibration.html",
+                                    src="/assets/_style/animazione_calibration.html",
                                     style={
                                         "width": "100%", 
                                         "height": "400px",
@@ -71,7 +71,7 @@ layout = dbc.Container([
                         ], md=7, className="text-center text-md-center"), 
                         dbc.Col([
                             dbc.Button(
-                                "Auto ✨", 
+                                "Optimize ✨", 
                                 id="btn-opt-example", 
                                 size="lg", 
                                 color="warning", 
@@ -93,7 +93,7 @@ layout = dbc.Container([
                        dbc.Col([
                             html.Div([
                                 html.Iframe(
-                                    src="/assets/animazione_clustering.html",
+                                    src="/assets/_style/animazione_clustering.html",
                                     style={
                                         "width": "100%", 
                                         "height": "400px",

@@ -1,0 +1,61 @@
+.card-custom-sx {
+    border-radius: 16px !important;       
+    border: none !important; 
+    border-left: 6px solid #0091a6 !important; 
+    background-color: #ffffff !important;
+    
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.05) !important; 
+    transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+.card-custom-sx:hover {
+    transform: translateY(-5px) !important;
+    box-shadow: 0 15px 35px rgba(0, 145, 166, 0.15) !important; 
+}
+
+.card-custom-dx {
+    border-radius: 16px !important;       
+    border: none !important; 
+    border-right: 6px solid #0091a6 !important; 
+    background-color: #ffffff !important;
+    
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.05) !important; 
+    transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+.card-custom-dx:hover {
+    transform: translateY(-5px) !important;
+    box-shadow: 0 15px 35px rgba(0, 145, 166, 0.15) !important; 
+}
+
+.card-info {
+    border-radius: 16px !important;       
+    border: none !important; 
+    border-left: 6px solid #F39C12 !important; 
+    border-right: 6px solid #F39C12 !important; 
+    background-color: #ffffff !important;
+    
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.05) !important; 
+    transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+.card-info:hover {
+    transform: translateY(-5px) !important;
+    box-shadow: 0 15px 35px rgba(255, 217, 0, 0.137) !important; 
+}
+
+.card-glossary{
+    border-radius: 16px !important;       
+    border: none !important; 
+    border-left: 6px solid #A8D548 !important; 
+    border-right: 6px solid #A8D548 !important; 
+    background-color: #ffffff !important;
+    
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.05) !important; 
+    transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+.card-glossary:hover {
+    transform: translateY(-5px) !important;
+    box-shadow: 0 15px 35px rgba(98, 255, 0, 0.137) !important; 
+}

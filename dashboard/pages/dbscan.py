@@ -9,117 +9,149 @@ from sklearn.cluster import DBSCAN
 from sklearn.metrics import fowlkes_mallows_score, silhouette_score
 from sklearn.metrics import fowlkes_mallows_score, adjusted_rand_score, adjusted_mutual_info_score
 
-# Assicurati di importare le variabili e le funzioni dal tuo file utils
-from utils import (
-    DF_GLOBALE, EMBEDDINGS_GLOBALI, 
-    genera_grafico_3d, genera_tabella_crosstab, calcola_percorso_hover
-)
+from utils import EMBEDDINGS_GLOBALI, DF_GLOBALE, genera_grafico_3d, genera_tabella_crosstab, calcola_percorso_hover
 
-# Creiamo i dataset Labeled filtrando i dati globali all'avvio della pagina
+dash.register_page(__name__, path='/dbscan', name='DBSCAN')
+
+ORDINE_CATEGORIE = ['Labeled Set', 'Curated', 'Usable', 'Hardcore', 'Ruined Surface', 'Hands', 'Others']
+
+# ==========================================
+# PREPARAZIONE DATI INIZIALI
+# ==========================================
 maschera_labeled = DF_GLOBALE['UnifiedCategory'] == 'Labeled Set'
 X_labeled = EMBEDDINGS_GLOBALI[maschera_labeled]
 df_labeled = DF_GLOBALE[maschera_labeled].copy()
 
-dash.register_page(__name__, path='/dbscan', name='DBSCAN Clustering')
-
-# Supponendo che ORDINE_CATEGORIE sia importato da utils
-ORDINE_CATEGORIE = ['Labeled Set', 'Curated', 'Usable', 'Hardcore', 'Ruined Surface', 'Hands', 'Others']
-
+# ==========================================
+# LAYOUT
+# ==========================================
 layout = html.Div([
-    html.H2("DBSCAN Clustering", className="mb-3", style={"color": "#430783"}),
-    html.Hr(),
+    html.Div([
+        dbc.Row([
+        
+            dbc.Col([
+                dbc.Card([
+                    html.P([
+                        html.Span("💡 How it works: ", className="fw-bold text-primary", style={"color": "#2E4C66"}),
+                        html.Span("The algorithm aggregates specimens by finding areas in space with a high concentration of points, " \
+                                "separated by regions of low density (classified as noise).", className="text-muted")
+                    ], className="mb-0 text-center") 
+                ], className="shadow-sm border-0 rounded-3 h-100 card-custom-sx p-4"),
+                
+            ], width=12, lg=5, className="mb-3 mb-lg-0"),
+
+            # SECONDA COLONNA
+            dbc.Col([
+                dbc.Card([
+                    html.P([
+                        html.Span("🎯 When to use it: ", className="fw-bold text-primary", style={"color": "#2E4C66"}),
+                        html.Span("Because it relies on a fixed global distance threshold (Epsilon), it successfully identifies clusters of the same density, " \
+                                "but struggles if the dataset simultaneously contains both highly homogeneous species (tight clusters) and species " \
+                                "with high natural variance (spread-out clusters).", className="text-muted")
+                    ], className="mb-0 text-center") 
+                ], className="shadow-sm border-0 rounded-3 h-100 card-custom-sx p-4"),
+
+            ], width=12, lg=5, className="mb-3 mb-lg-0"),
+
+        ], justify="center", className="text-secondary p-4", style={"fontSize": "0.95rem", "lineHeight": "1.6"})     
+    ], className="mb-2"),
+
+    html.Hr(className="mb-5 text-muted"),
     
     # ---------------------------------------------------------
-    # FASE 1: LABELED SET
+    # STEP 1: LABELED SET
     # ---------------------------------------------------------
-    html.H4("Fase 1: Calibrazione della Distanza su Labeled Set", className="mb-3"),
+    html.Div([
+        html.H3([
+            html.I(className="bi bi-gear-fill me-2 text-primary"), 
+            "Step 1: Tool Calibration on Labeled Data"
+        ], className="mb-4 fw-bold step-title"),
+    ], className="d-flex align-items-center"),
+
     dbc.Row([
+        # COLUMN 1: PARAMETERS (Left)
         dbc.Col([
             dbc.Card([
-                # Selezione parametri Labeled 
-                dbc.CardHeader("⚙️ Parametri DBSCAN", className="fw-bold", style={"backgroundColor": "#C499F9"}),
+                dbc.CardHeader(
+                    html.H6("Algorithm Parameters", className="mb-0 fw-bold text-uppercase text-muted", style={"letterSpacing": "1px"}),                    
+                    className="bg-transparent border-bottom-0 pt-4 pb-0"
+                ),
                 dbc.CardBody([
+                    # Epsilon Slider
                     html.Div([
-                        html.Label("Epsilon (eps):", className="fw-bold mt-2"),
-                        dbc.Button("✨ Auto", id="btn-opt-dbscan-lab", size="sm", color="warning", outline=True, className="float-end")
-                    ], className="d-flex justify-content-between align-items-center mb-2"),
-                    html.Div(
-                        "Distanza massima per unire due foto nello stesso cluster.", 
-                        className="text-muted mb-2", style={"fontSize": "12px"}
-                    ),
-                    # Nota: range e step sono impostati per distanze Coseno (0.0 a 1.0). Se usi Euclidea, potresti doverli alzare.
-                    dcc.Slider(id='dbscan-slider-eps-lab', min=0.01, max=0.5, step=0.01, value=0.3, marks={round(i*0.1, 1): str(round(i*0.1, 1)) for i in range(1, 6)}, className="mb-4", tooltip={"always_visible": False}),
+                        html.Label("Epsilon", className="fw-bold text-primary mb-0"),
+                        html.Div("Defines the maximum distance between points to be considered neighbors.", className="text-muted small mb-3"),
+                        dcc.Slider(id='dbscan-slider-eps-lab', min=0.01, max=0.5, step=0.01, value=0.3, marks={round(i*0.1, 1): str(round(i*0.1, 1)) for i in range(1, 6)}, className="mb-4 force-blue-slider", tooltip={"always_visible": False}),
+                    ], className="custom-slider-box mb-4"),
                     
-                    html.Label("Min Samples:", className="fw-bold mt-2"),
-                    html.Div(
-                        "Foto minime per formare un cluster (densità).", 
-                        className="text-muted mb-2", style={"fontSize": "12px"}
-                    ),
-                    dcc.Slider(id='dbscan-slider-min-samples-lab', min=2, max=30, step=1, value=15, marks={i: str(i) for i in range(5, 31, 5)}, className="mb-4", tooltip={"always_visible": False}),
-                    
-                    # Controllo per gestire gli outlier
-                    dbc.Checklist(
-                        id="dbscan-toggle-noise-lab",
-                        options=[{"label": " Mostra Rumore (Outliers)", "value": True}],
-                        value=[True],
-                        switch=True,
-                        className="fw-bold text-secondary mt-2 mb-3"
-                    ),
+                    # Min Samples Slider
+                    html.Div([
+                        html.Label("Min Samples", className="fw-bold text-primary mb-2"),
+                        html.Div("Minimum points required to form a dense region (cluster).", className="text-muted small mb-3"),
+                        dcc.Slider(id='dbscan-slider-min-samples-lab', min=2, max=30, step=1, value=15, marks={i: str(i) for i in range(5, 31, 5)}, className="mb-4 force-blue-slider", tooltip={"always_visible": False}),
+                    ], className="custom-slider-box mb-4"),
 
-                    html.Hr(),
-                    html.Div(id='dbscan-metriche-box-lab', className="mt-3"),
-                    dcc.Store(id='store-top5-dbscan-lab', data=[])
-                ])
-            ], className="shadow-sm border-0 h-100")
-        ], width=3),
+                    html.Div(
+                        dbc.Button("Optimize ✨", id="btn-opt-dbscan-lab", size="sm", color="warning", outline=True, className="auto-tune-btn rounded-pill px-3 py-1 fw-bold shadow-sm"),
+                        className="d-flex justify-content-center mb-2"
+                    ),
+                    # Metrics Container
+                    html.Div([
+                        html.Div(id='dbscan-metriche-box-lab'),
+                    ]),
+                    
+                    dcc.Store(id='store-top5-dbscan-lab', data=[])  
+                ], className="p-4") 
+            ], className="shadow-sm border-0 h-100 rounded-3")
+        ], width=12, lg=3, className="mb-4 mb-lg-0"), 
         
+        # COLUMN 2: VISUALIZATION & PREVIEW (Right)
         dbc.Col([
             dbc.Row([
-                # Grafico 3D Labeled 
+                # 3D Graph
                 dbc.Col(
                     dbc.Card(
-                        dbc.CardBody(
-                            dcc.Graph(id='dbscan-grafico-3d-lab', style={'height': '420px'}, clear_on_unhover=True),
-                            className="p-0" 
-                        ), 
-                        style={'height': '420px'},
-                        className="shadow-sm border-0"
+                        dbc.CardBody([
+                            html.H6("Latent Space Visualization", className="fw-bold text-muted mb-3 px-3 pt-2 text-uppercase", style={"letterSpacing": "1px"}),
+                            dcc.Graph(id='dbscan-grafico-3d-lab', style={'height': '380px'}, clear_on_unhover=True),
+                        ], className="p-2"), 
+                        style={'height': '460px'},
+                        className="shadow-sm border-0 rounded-3 mb-4 mb-xl-0"
                     ),
-                    width=9
+                    width=12, xl=8
                 ),
                 
-                # Box Immagine Hover Labeled 
+                # Image Preview Hover
                 dbc.Col(
                     dbc.Card([
-                        dbc.CardHeader("Preview", className="text-center fw-bold", style={"backgroundColor": "#C499F9", "fontSize": "12px", "height": "40px", "padding": "8px"}),
                         dbc.CardBody([
-                            html.H6(id='dbscan-hover-text-lab', className="text-center text-secondary mb-2", style={'fontSize': '11px', 'height': '15px'}),
-                        
-                            html.Img(
-                                id='dbscan-hover-image-lab', 
-                                style={
-                                    'maxWidth': '100%', 
-                                    'maxHeight': '330px',    
-                                    'objectFit': 'contain', 
-                                    'borderRadius': '5px'
-                                }
-                            )
-                        ], className="d-flex flex-column align-items-center justify-content-center", style={'height': '380px'}) 
-                    ], style={'height': '420px'}, className="shadow-sm border-0"),
-                    width=3
+                            html.H6("Specimen Preview", className="fw-bold text-muted mb-3 text-uppercase text-center", style={"letterSpacing": "1px"}),
+                            html.Div([
+                                html.H6(id='dbscan-hover-text-lab', className="text-center text-secondary mb-2", style={'fontSize': '12px', 'minHeight': '18px'}),
+                                html.Img(
+                                    id='dbscan-hover-image-lab', 
+                                    style={'maxWidth': '100%', 'maxHeight': '320px', 'objectFit': 'contain', 'borderRadius': '8px'}
+                                )
+                            ], className="d-flex flex-column align-items-center justify-content-center h-100") 
+                        ], className="p-4") 
+                    ], style={'height': '460px'}, className="shadow-sm border-0 rounded-3"), 
+                    width=12, xl=4
                 )
-            ], className="border-0 mb-3 align-items-stretch"),
+            ], className="mb-4"),
             
-            # Tabella Distribuzione Labeled
+            # Crosstab Table
             dbc.Row([
                 dbc.Col(
                     dbc.Card([
-                        dbc.CardHeader("Matrice di Distribuzione (Labeled Set)", className="fw-bold", style={"backgroundColor": "#C499F9"}),
-                        dbc.CardBody(id='dbscan-tabella-crosstab-lab')
-                    ], className="shadow-sm border-0")
+                        dbc.CardHeader(
+                            html.H6("Distribution Matrix (Labeled Set)", className="fw-bold text-muted mb-3 px-3 pt-2 text-uppercase", style={"letterSpacing": "1px"}), 
+                            className="bg-transparent border-bottom-0 pt-4 pb-0"
+                        ),
+                        dbc.CardBody(id='dbscan-tabella-crosstab-lab', className="p-4")
+                    ], className="shadow-sm border-0 rounded-3")
                 )
             ])
-        ], width=9)
+        ], width=12, lg=9)
     ]),
 
     html.Hr(className="my-5"),
@@ -127,95 +159,112 @@ layout = html.Div([
     # ---------------------------------------------------------
     # FASE 2: UNLABELED SET
     # ---------------------------------------------------------
-    html.H4("Fase 2: Applicazione parametri su Unlabeled Set", className="mb-3"),
+    html.Div([
+        html.H3([
+            html.I(className="bi bi-robot me-2 text-primary"), 
+            "Step 2: Analyzing Unlabeled Data"
+        ], className="mb-4 fw-bold step-title"),
+    ], className="d-flex align-items-center mt-5"),
+
     dbc.Row([
+        # COLUMN 1: PARAMETERS (Left)
         dbc.Col([
             dbc.Card([
-                # Selezione parametri Unlabeled 
-                dbc.CardHeader("⚙️ Parametri DBSCAN", className="fw-bold", style={"backgroundColor": "#C499F9"}),
+                dbc.CardHeader(
+                    html.H6("Algorithm Parameters", className="mb-0 fw-bold text-uppercase text-muted", style={"letterSpacing": "1px"}), 
+                    className="bg-transparent border-bottom-0 pt-4 pb-0"
+                ),
                 dbc.CardBody([
-                    dcc.Store(id='store-top5-dbscan-ted'),
-                    dbc.Button("🔄 Usa parametri Labeled Set", id="btn-sync-params-dbscan", color="success", outline=True, className="w-100 mb-4 shadow-sm"),
-                    dbc.Button("✨ Auto-Tune (con Validazione Labeled)", id="btn-opt-dbscan-ted", color="primary", className="w-100 mb-4 shadow-sm"),
-
-                    html.Label("Epsilon (eps):", className="fw-bold mt-2"),
-                    dcc.Slider(id='dbscan-slider-eps-ted', min=0.01, max=0.5, step=0.01, value=0.3, marks={round(i*0.1, 1): str(round(i*0.1, 1)) for i in range(1, 6)}, className="mb-4", tooltip={"always_visible": False}),
+                    dbc.Button("Import Parameters", id="btn-sync-params-dbscan", color="success", outline=True, className="sync-btn w-100 mb-2 rounded-pill shadow-sm fw-bold"),
+                    html.Div("Syncs your values with the ones calibrated in Step 1", className="text-muted small text-center mb-4"),
                     
-                    html.Label("Min Samples:", className="fw-bold mt-2"),
-                    dcc.Slider(id='dbscan-slider-min-samples-ted', min=2, max=30, step=1, value=15, marks={i: str(i) for i in range(5, 31, 5)}, className="mb-4", tooltip={"always_visible": False}),
-
-                    dbc.Checklist(
-                        id="dbscan-toggle-noise-ted",
-                        options=[{"label": " Mostra Rumore (Outliers)", "value": True}],
-                        value=[True],
-                        switch=True,
-                        className="fw-bold text-secondary mt-2 mb-3"
-                    ),
-
-                    html.Hr(),
-                    html.Div(id='dbscan-metriche-box-ted', className="mt-3")
-                ])
-            ], className="shadow-sm border-0 h-auto mb-3"),
-            dbc.Card([
-                dbc.CardHeader("🔍 Filtri Dataset", className="fw-bold", style={"backgroundColor": "#C499F9"}),
-                dbc.CardBody([
+                    # Epsilon Slider
                     html.Div([
-                        dbc.Checklist(
-                            id='filter-main-dbscan',
-                            options=[{'label': 'Seleziona Tutti', 'value': 'ALL'}] + [{'label': c, 'value': c} for c in ORDINE_CATEGORIE],
-                            value=['Curated'], 
-                            inline=False, 
-                            className="mb-2"
-                        )
-                    ], className="d-flex flex-column justify-content-flex-start", style={'padding': '10px', 'border': '1px solid #dee2e6', 'borderRadius': '5px', 'height': '100%', 'overflowY': 'auto'})
-                ], className="d-flex flex-column h-100")
-            ], className="shadow-sm h-auto border-0")
-        ], className="border-0 mb-3 align-items-stretch",width=3),
+                        html.Label("Epsilon", className="fw-bold text-primary mb-2"),
+                        dcc.Slider(id='dbscan-slider-eps-ted', min=0.01, max=0.5, step=0.01, value=0.3, marks={round(i*0.1, 1): str(round(i*0.1, 1)) for i in range(1, 6)}, className="mb-4 force-blue-slider", tooltip={"always_visible": False}),
+                    ], className="custom-slider-box"),
+                    
+                    # Min Samples Slider
+                    html.Div([
+                        html.Label("Min Samples", className="fw-bold text-primary mb-2"),
+                        dcc.Slider(id='dbscan-slider-min-samples-ted', min=2, max=30, step=1, value=15, marks={i: str(i) for i in range(5, 31, 5)}, className="mb-4 force-blue-slider", tooltip={"always_visible": False}),
+                    ], className="custom-slider-box"),
 
+                    html.Div(
+                        dbc.Button("Optimize Mixed Test ✨", id="btn-opt-dbscan-ted", size="sm", color="warning", outline=True, className="mb-2 rounded-pill shadow-sm px-3 py-1 fw-bold auto-tune-btn"),
+                        className="d-flex justify-content-center"
+                    ),
+                    html.Div("Only works for mixed tests (Labeled and Unlabeld datasets combined)", className="text-muted small text-center mb-2"),
+                    
+                    # Metrics Container
+                    html.Div([
+                        html.Div(id='dbscan-metriche-box-ted'),
+                    ]),
+                    
+                    dcc.Store(id='store-top5-dbscan-ted', data=[])  
+                ], className="p-4")
+            ], className="shadow-sm border-0 rounded-3 mb-4"),
+
+            # Filter Card
+            dbc.Card([
+                dbc.CardHeader(
+                    html.H6("Dataset Filters", className="mb-0 fw-bold text-uppercase text-muted", style={"letterSpacing": "1px"}), 
+                    className="bg-transparent border-bottom-0 pt-4 pb-0"
+                ),
+                dbc.CardBody([
+                    dbc.Checklist(
+                        id='filter-main-dbscan',
+                        options=[{'label': 'Select All', 'value': 'ALL'}] + [{'label': c, 'value': c} for c in ORDINE_CATEGORIE],
+                        value=['Curated'], 
+                        className="mb-2"
+                    )
+                ], className="p-4")
+            ], className="shadow-sm border-0 rounded-3")
+        ], width=12, lg=3, className="mb-4 mb-lg-0"),
+
+        # COLUMN 2: VISUALIZATION & PREVIEW (Right)
         dbc.Col([
             dbc.Row([
-                # Grafico 3D Unlabeled
+                # 3D Graph
                 dbc.Col(
                     dbc.Card(
-                        dbc.CardBody(
-                            dcc.Graph(id='dbscan-grafico-3d-ted', style={'height': '420px'}, clear_on_unhover=True),
-                            className="p-0"
-                        ), 
-                        style={'height': '420px'},
-                        className="shadow-sm border-0"
-                    ), 
-                    width=9
+                        dbc.CardBody([
+                            html.H6("Latent Space Visualization", className="fw-bold text-muted mb-3 px-3 pt-2 text-uppercase", style={"letterSpacing": "1px"}),
+                            dcc.Graph(id='dbscan-grafico-3d-ted', style={'height': '380px'}, clear_on_unhover=True),
+                        ], className="p-2"), 
+                        style={'height': '460px'},
+                        className="shadow-sm border-0 rounded-3 mb-4"
+                    ),
+                    width=12, xl=8
                 ),
-                # Box Immagine Hover Unlabeled
+                # Image Preview
                 dbc.Col(
                     dbc.Card([
-                        dbc.CardHeader("Preview", className="text-center fw-bold", style={"backgroundColor": "#C499F9", "fontSize": "12px", "height": "40px", "padding": "8px"}),
                         dbc.CardBody([
-                            html.H6(id='dbscan-hover-text-ted', className="text-center text-secondary mb-2", style={'fontSize': '11px'}),
-                            
-                            html.Img(
-                                id='dbscan-hover-image-ted', 
-                                style={
-                                    'maxWidth': '100%', 
-                                    'maxHeight': '330px',    
-                                    'objectFit': 'contain', 
-                                    'borderRadius': '5px'
-                                }
-                            )
-                        ], className="d-flex flex-column align-items-center justify-content-center", style={'height': '380px'}) 
-                    ], style={'height': '420px'}, className="shadow-sm border-0"),
-                    width=3
+                            html.H6("Specimen Preview", className="fw-bold text-muted mb-3 text-uppercase text-center", style={"letterSpacing": "1px"}),
+                            html.Div([
+                                html.H6(id='dbscan-hover-text-ted', className="text-center text-secondary mb-2", style={'fontSize': '12px', 'minHeight': '18px'}),
+                                html.Img(id='dbscan-hover-image-ted', style={'maxWidth': '100%', 'maxHeight': '320px', 'objectFit': 'contain', 'borderRadius': '8px'})
+                            ], className="d-flex flex-column align-items-center justify-content-center h-100")
+                        ], className="p-4")
+                    ], style={'height': '460px'}, className="shadow-sm border-0 rounded-3"),
+                    width=12, xl=4
                 )
-            ], className="border-0 mb-3 align-items-stretch"),
-
-            # Tabella Distribuzione Unlabeled
+            ]),
+            
+            # Distribution Matrix
             dbc.Row([
-                dbc.Col(dbc.Card([
-                    dbc.CardHeader("Matrice di Distribuzione (Unlabeled Set)", className="fw-bold", style={"backgroundColor": "#C499F9"}),
-                    dbc.CardBody(id='dbscan-tabella-crosstab-ted')
-                ], className="shadow-sm border-0"))
+                dbc.Col(
+                    dbc.Card([
+                        dbc.CardHeader(
+                            html.H6("Distribution Matrix (Unlabeled Set)", className="fw-bold text-muted mb-3 px-3 pt-2 text-uppercase", style={"letterSpacing": "1px"}),
+                            className="bg-transparent border-bottom-0 pt-4 pb-0"
+                        ),
+                        dbc.CardBody(id='dbscan-tabella-crosstab-ted', className="p-4")
+                    ], className="shadow-sm border-0 rounded-3")
+                )
             ])
-        ], width=9)
+        ], width=12, lg=9)
     ])
 ], className="mb-5")
 
@@ -242,17 +291,12 @@ def auto_ottimizza_dbscan_labeled(n_clicks):
     classi_uniche = df_labeled['Specie Predetta'].unique()
     
     # Grid Search per DBSCAN classico (Distanza Euclidea)
-    # Range Eps da 0.1 a 1.0 (step 0.05 per non appesantire il calcolo automatico)
     for eps in np.arange(0.1, 1.05, 0.05):
         for ms in range(5, 31, 2):
-            # Riapplichiamo il DBSCAN come lo usavi tu (Euclidea sui dati grezzi)
             clusterer = DBSCAN(eps=eps, min_samples=ms, metric='euclidean')
             labels = clusterer.fit_predict(X_labeled)
             
-            # Calcolo del rumore (-1)
             noise_ratio = np.sum(labels == -1) / len(labels)
-            
-            # Penalizziamo configurazioni che scartano più del 40%
             if noise_ratio > 0.4:
                 continue 
                 
@@ -268,10 +312,7 @@ def auto_ottimizza_dbscan_labeled(n_clicks):
                 scores_simulati.append(fmi)
                 
             mean_fmi = np.mean(scores_simulati)
-            
-            # Formula: FMI scalato per penalizzare eccesso di rumore
             score_finale = mean_fmi * (1.0 - noise_ratio)
-            
             fmi_base = fowlkes_mallows_score(df_labeled['Specie Predetta'], labels)
             
             risultati.append({
@@ -295,42 +336,39 @@ def auto_ottimizza_dbscan_labeled(n_clicks):
      Output('dbscan-metriche-box-lab', 'children')],
     [Input('dbscan-slider-eps-lab', 'value'), 
      Input('dbscan-slider-min-samples-lab', 'value'),
-     Input('dbscan-toggle-noise-lab', 'value'),
      Input('store-top5-dbscan-lab', 'data')]
 )
-def aggiorna_dbscan_labeled(eps, ms, mostra_rumore, top5_data):
+def aggiorna_dbscan_labeled(eps, ms, top5_data):
     clusterer = DBSCAN(eps=eps, min_samples=ms, metric='euclidean')
     labels = clusterer.fit_predict(X_labeled)
     
     df_plot = df_labeled.copy()
     
-    df_plot['Cluster'] = [str(l) if l != -1 else 'Rumore' for l in labels]
+    df_plot['Cluster'] = [str(l) if l != -1 else 'Noise' for l in labels]
     
     noise_ratio = np.sum(labels == -1) / len(labels)
     fmi = fowlkes_mallows_score(df_plot['Specie Predetta'], labels)
-    
-    if not mostra_rumore:
-        df_plot = df_plot[df_plot['Cluster'] != 'Rumore']
-        
+ 
     if df_plot.empty:
-        return dash.no_update, "Nessun dato (Tutto rumore)", html.Div("Tutte le foto sono state etichettate come rumore.")
+        return dash.no_update, "No data (All of it is classified as Noise)", html.Div("Tutte le foto sono state etichettate come Noise.")
 
-    fig = genera_grafico_3d(df_plot, "Spazio Latente Labeled Set (DBSCAN)")
+    fig = genera_grafico_3d(df_plot, " ")
     
-    if 'Rumore' in df_plot['Cluster'].values:
-        fig.update_traces(selector=dict(name="Rumore"), marker=dict(color='rgba(150, 150, 150, 0.3)'))
+    if 'Noise' in df_plot['Cluster'].values:
+        fig.update_traces(selector=dict(name="Noise"), marker=dict(color='rgba(150, 150, 150, 0.3)'))
 
     tabella = genera_tabella_crosstab(df_plot)
     
     elementi_box = [
-        html.H6("Metriche DBSCAN:", className="text-success fw-bold"), 
-        html.P(f"FMI (Purezza): {fmi:.4f}", className="mb-1"),
-        html.P(f"Rumore (Scartate): {noise_ratio:.1%}", className="mb-1 text-danger")
+        html.Hr(className="mb-4"),
+        html.H6("Validation Metrics", className="fw-bold text-muted mb-3 text-uppercase", style={"letterSpacing": "1px"}),
+        html.P(f"FMI: {fmi:.4f}", className="mb-1"),
+        html.P(f"Noise: {noise_ratio:.1%}", className="mb-1 text-danger")
     ]
     
     if top5_data and eps == top5_data[0]['eps'] and ms == top5_data[0]['ms']:
-        elementi_box.append(html.Hr(className="my-2"))
-        elementi_box.append(html.H6("🏆 Top 5 Parametri:", className="text-info fw-bold mt-2", style={'fontSize': '13px'}))
+        elementi_box.append(html.Hr(className="mb-4"))
+        elementi_box.append(html.H6("Best Values:", className="mb-2 fw-bold text-uppercase text-muted", style={"letterSpacing": "1px"}))
         for res in top5_data:
             elementi_box.append(
                 html.P(f"Eps: {res['eps']} | MS: {res['ms']} | FMI: {res['fmi']:.3f} | Noise: {res['noise']:.1%}", 
@@ -381,13 +419,12 @@ def gestisci_input_dbscan_ted(filtri_selezionati, n_clicks, lab_eps, lab_ms, ted
      Output('dbscan-metriche-box-ted', 'children')],
     [Input('dbscan-slider-eps-ted', 'value'), 
      Input('dbscan-slider-min-samples-ted', 'value'),
-     Input('dbscan-toggle-noise-ted', 'value'),
      Input('filter-main-dbscan', 'value'),
      Input('store-top5-dbscan-ted', 'data')]
 )
-def aggiorna_dbscan_ted(eps, ms, mostra_rumore, categorie, top5_data):
+def aggiorna_dbscan_ted(eps, ms, categorie, top5_data):
     if not categorie:
-        return dash.no_update, "Nessun dato", html.Div("Seleziona almeno un filtro")
+        return dash.no_update, "No data", html.Div("Select at least one filter")
 
     categorie_attive = [c for c in categorie if c != 'ALL']
     maschera_ted = DF_GLOBALE['UnifiedCategory'].isin(categorie_attive)
@@ -395,48 +432,46 @@ def aggiorna_dbscan_ted(eps, ms, mostra_rumore, categorie, top5_data):
     df_ted = DF_GLOBALE[maschera_ted].copy()
     
     if len(X_ted) < ms:
-        return dash.no_update, "Pochi dati", html.Div("Dati insufficienti.")
+        return dash.no_update, "Not enought data", html.Div("Dati insufficienti.")
 
     clusterer = DBSCAN(eps=eps, min_samples=ms, metric='euclidean')
     labels = clusterer.fit_predict(X_ted)
     
-    df_ted['Cluster'] = [str(l) if l != -1 else 'Rumore' for l in labels]
+    df_ted['Cluster'] = [str(l) if l != -1 else 'Noise' for l in labels]
     
     noise_ratio = np.sum(labels == -1) / len(labels)
     num_clusters = len(set(labels)) - (1 if -1 in labels else 0)
     
-    # Calcolo Silhouette Score SOLO sui punti che non sono rumore
+    # Calcolo Silhouette Score SOLO sui punti che non sono Noise
     mask_no_noise = labels != -1
     try:
         if num_clusters > 1:
             sil_score = silhouette_score(X_ted[mask_no_noise], labels[mask_no_noise], metric='euclidean')
             sil_text = f"{sil_score:.3f}"
         else:
-            sil_text = "N/A (Serve >1 cluster)"
+            sil_text = "N/A with just 1 cluster"
     except Exception:
         sil_text = "Errore Calcolo"
 
-    if not mostra_rumore:
-        df_ted = df_ted[df_ted['Cluster'] != 'Rumore']
-
-    fig = genera_grafico_3d(df_ted, "Scoperta Classi (DBSCAN Unsupervised)")
+    fig = genera_grafico_3d(df_ted, " ")
     
-    if 'Rumore' in df_ted['Cluster'].values:
-        fig.update_traces(selector=dict(name="Rumore"), marker=dict(color='rgba(150, 150, 150, 0.3)'))
+    if 'Noise' in df_ted['Cluster'].values:
+        fig.update_traces(selector=dict(name="Noise"), marker=dict(color='rgba(150, 150, 150, 0.3)'))
 
     tabella = genera_tabella_crosstab(df_ted)
 
     elementi_box = [
-        html.H6(f"Immagini analizzate: {len(X_ted)}", className="text-secondary fw-bold"),
-        html.P(f"Isole Trovate: {num_clusters}", className="text-primary fw-bold mb-1"),
-        html.P(f"Rumore (Scartate): {noise_ratio:.1%}", className="text-danger fw-bold mb-1"),
-        html.P(f"Silhouette (Senza rumore): {sil_text}", className="text-success fw-bold")
+        html.Hr(className="mb-4"),
+        html.H6("Validation Metrics", className="fw-bold text-muted mb-3 text-uppercase", style={"letterSpacing": "1px"}),
+        html.H6(f"Number of samples: {len(X_ted)}", className="text-secondary fw-bold"),
+        html.P(f"Noise: {noise_ratio:.1%}", className="text-danger fw-bold mb-1"),
+        html.P(f"Silhouette Score: {sil_text}", className="text-success fw-bold")
     ]
     
     # Aggiunta della Top 5 se l'auto-tuning è stato eseguito e siamo sui parametri migliori
     if top5_data and eps == top5_data[0]['eps'] and ms == top5_data[0]['ms']:
         elementi_box.append(html.Hr(className="my-2"))
-        elementi_box.append(html.H6("🏆 Top 5 Parametri (Validati su Labeled):", className="text-info fw-bold mt-2", style={'fontSize': '13px'}))
+        elementi_box.append(html.H6("Best Values Based on Labeled:", className="mb-2 fw-bold text-uppercase text-muted", style={"letterSpacing": "1px"}))
         for res in top5_data:
             elementi_box.append(
                 html.P(f"Eps: {res['eps']} | MS: {res['ms']} | Score: {res['score']:.3f} | Noise: {res['noise']:.1%}", 
@@ -469,31 +504,25 @@ def hover_ted(hoverData): return calcola_percorso_hover(hoverData)
 @callback(
     [Output('dbscan-slider-eps-ted', 'value', allow_duplicate=True),
      Output('dbscan-slider-min-samples-ted', 'value', allow_duplicate=True),
-     Output('store-top5-dbscan-ted', 'data')], # Necessario creare un dcc.Store(id='store-top5-dbscan-ted') nel layout
-    Input('btn-opt-dbscan-ted', 'n_clicks'),   # Necessario un bottone dedicato nel layout della Fase 2
-    State('filter-main-dbscan', 'value'),      # Leggiamo i filtri attuali (es. ['Labeled', 'Curated'])
+     Output('store-top5-dbscan-ted', 'data')], 
+    Input('btn-opt-dbscan-ted', 'n_clicks'),  
+    State('filter-main-dbscan', 'value'),     
     prevent_initial_call=True
 )
 def auto_ottimizza_dbscan_misto(n_clicks, categorie):
     if not n_clicks or not categorie:
         raise PreventUpdate
 
-    # 1. Filtriamo i dati globali in base alle categorie selezionate nella UI
     categorie_attive = [c for c in categorie if c != 'ALL']
     maschera_totale = DF_GLOBALE['UnifiedCategory'].isin(categorie_attive)
     
     df_subset = DF_GLOBALE[maschera_totale].copy()
     X_subset = EMBEDDINGS_GLOBALI[maschera_totale]
 
-    # 2. Identifichiamo DOVE si trovano i dati Labeled all'interno del subset
-    # Sostituisci 'Labeled' con il nome esatto usato nel tuo dataset
     maschera_labeled_interna = df_subset['UnifiedCategory'] == 'Labeled Set'
-    
-    # Se non c'è nessun dato Labeled nel mix, non possiamo validare le metriche
     if not maschera_labeled_interna.any():
         return dash.no_update, dash.no_update, dash.no_update
 
-    # Estraiamo la Ground Truth (le etichette vere) solo per i dati Labeled
     labels_reali_labeled = df_subset[maschera_labeled_interna]['Specie Predetta']
 
     risultati = []
@@ -508,14 +537,9 @@ def auto_ottimizza_dbscan_misto(n_clicks, categorie):
             clusterer = DBSCAN(eps=eps, min_samples=ms, metric='euclidean')
             labels_totali = clusterer.fit_predict(X_subset)
             
-            # Calcolo del rumore GLOBALE sul subset
             noise_ratio_totale = np.sum(labels_totali == -1) / len(labels_totali)
             
-            # Scartiamo configurazioni con troppo rumore globale (> 40%)
-            #if noise_ratio_totale > 0.4:
-            #    continue 
-                
-            # 4. Estraiamo SOLO le predizioni relative ai dati Labeled per validarle
+            # Estraiamo SOLO le predizioni relative ai dati Labeled per validarle
             labels_pred_labeled = labels_totali[maschera_labeled_interna]
             
             # Calcolo delle Metriche richieste
@@ -523,7 +547,6 @@ def auto_ottimizza_dbscan_misto(n_clicks, categorie):
             ami = adjusted_mutual_info_score(labels_reali_labeled, labels_pred_labeled)
             fmi = fowlkes_mallows_score(labels_reali_labeled, labels_pred_labeled)
             
-            # Creiamo uno score composito (Media delle 3 metriche penalizzata dal rumore globale)
             media_metriche = (ari + ami + fmi) / 3.0
             score_finale = media_metriche * (1.0)
             

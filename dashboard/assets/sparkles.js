@@ -11,7 +11,7 @@ function createSparkles(e) {
     const btn = e.target;
     
     // Quante scintille creare per click (es. 25-30)
-    const numSparkles = 100 + Math.floor(Math.random() * 10);
+    const numSparkles = 300 + Math.floor(Math.random() * 10);
 
     for (let i = 0; i < numSparkles; i++) {
         // Crea l'elemento DOM
