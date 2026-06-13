@@ -1,13 +1,44 @@
+# ==========================================
+# PYTHON & ENVIRONMENT
+# ==========================================
 __pycache__/
+.env
+
+# ==========================================
+# PROJECT-SPECIFIC DIRECTORIES
+# ==========================================
 R18_imagenet/
 vit/
 orchid/
 classificazione/
-models/
 features/
-*.npz
-.env
+
+# ==========================================
+# DATA PIPELINE 
+# ==========================================
+data/00_metadata/*
+data/01_raw/*
+data/02_preprocessed/*
+data/03_features/*
+
+# ==========================================
+# MACHINE LEARNING MODELS & WEIGHTS
+# ==========================================
+models/
 *.pth
+*.pt
+*.h5
+
+# ==========================================
+# DATA FILES & GENERATED ASSETS
+# ==========================================
+*.npz
+dashboard/assets/labeled_images/*
+dashboard/assets/unlabeled_images/*
+
+# ==========================================
+# GLOBAL IMAGE EXTENSIONS
+# ==========================================
 *.jpg
 *.jpeg
 *.png

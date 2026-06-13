@@ -1,12 +1,31 @@
+# ==========================================
+# DEEP LEARNING & COMPUTER VISION 
+# (Unit 1: Preprocessing & Unit 2: Extraction)
+# ==========================================
 torch
 torchvision
+Pillow
+
+# ==========================================
+# DATA MANIPULATION & CLUSTERING
+# (Unit 2: Extraction & Unit 3: Dashboard)
+# ==========================================
 numpy
 pandas
-scikit-learn
-matplotlib
 openpyxl
-Pillow
-python-dotenv
+scikit-learn
+hdbscan
+umap-learn
+
+# ==========================================
+# WEB DASHBOARD & VISUALIZATION
+# (Unit 3: Dashboard)
+# ==========================================
 dash
 dash-bootstrap-components
 plotly
+
+# ==========================================
+# UTILITIES
+# ==========================================
+python-dotenv

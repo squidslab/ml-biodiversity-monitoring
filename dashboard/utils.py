@@ -4,36 +4,41 @@ GENERIC DATA LOADING UTILITIES FOR CLUSTERING PIPELINE
 =============================================================================
 
 This module provides a generic, plug-and-play way to load features (.npz) 
-and metadata (.xlsx) into the clustering interface. 
+and metadata (.xlsx) into the interactive clustering dashboard. 
 
 HOW TO USE THIS MODULE FOR YOUR OWN DATA:
 Modify the `DATASET_CONFIG` dictionary below to point to your files.
-You can use this pipeline in three different scenarios:
+The dashboard operates dynamically in one of three scenarios based on what 
+you provide here:
 
-1. BOTH UNLABELED AND LABELED DATA (Default):
-   - Provide paths for both unlabeled and labeled features/metadata.
-   - The pipeline will combine them and use the labeled data as a reference.
+1. HYBRID MODE (Default):
+   - Provide paths for both Labeled and Unlabeled features/metadata.
+   - The pipeline will combine them, allowing you to calibrate algorithms 
+     on the Labeled data (Step 1) and apply them to the Unlabeled data (Step 2).
 
 2. ONLY UNLABELED DATA:
    - Provide paths for `UNLABELED_FEATURES_PATH` and `UNLABELED_METADATA_PATH`.
-   - Set the labeled paths to `None` or an empty string `""`.
-   - The pipeline will cluster and visualize only the unlabeled data.
+   - Set the Labeled paths to `None`. 
+   - The dashboard will hide the calibration step and only show the Unlabeled set.
 
 3. ONLY LABELED DATA:
    - Provide paths for `LABELED_FEATURES_PATH` and `LABELED_METADATA_PATH`.
-   - Set the unlabeled paths to `None` or an empty string `""`.
-   - The pipeline will load only the labeled data, useful for exploring 
-     ground-truth distributions.
+   - Set the Unlabeled paths to `None`.
+   - Useful for pure benchmarking and exploring ground-truth distributions.
      
-Note: Ensure your Excel files contain the columns specified in `IMAGE_ID_COL`,
-`CATEGORY_COL`, and `PREDICTION_COL`. If they don't exist, the script will 
-safely create placeholders.
+*** REQUIRED EXCEL COLUMNS ***
+Ensure your metadata files contain the columns specified in `IMAGE_ID_COL`,
+`CATEGORY_COL`, and `PREDICTION_COL` within the configuration dictionary. 
+If they are missing, the script will safely create placeholders (e.g., 'Unknown'), 
+but validation metrics (AMI, ARI, FMI) will not compute correctly without 
+true labels in the `PREDICTION_COL`.
 
 *** IMPORTANT NOTE ON IMAGE PREVIEWS ***
-To see the image previews when hovering over the 3D plot points, you must 
-place your image folders inside your dashboard's `assets/` directory.
-Replace any existing folders with your own, ensuring their names exactly 
-match the `UNLABELED_IMAGES_DIR` and `LABELED_IMAGES_DIR` variables configured below.
+To see specimen previews when hovering over the 3D plot points, the images 
+must be physically located inside the `dashboard/assets/` directory.
+If you used the `run_pipeline.py` orchestrator, this was done automatically! 
+If you are loading data manually, ensure your folders exactly match the 
+`UNLABELED_IMAGES_DIR` and `LABELED_IMAGES_DIR` variables configured below.
 =============================================================================
 """
 
@@ -52,11 +57,11 @@ from sklearn.decomposition import PCA
 DATASET_CONFIG = {
     # --- File Paths ---
     # Set to None or "" if a specific subset is not available
-    'UNLABELED_FEATURES_PATH': 'features_unlabeled.npz',
-    'UNLABELED_METADATA_PATH': 'dataset_unlabeled.xlsx',
+    'UNLABELED_FEATURES_PATH': '../data/03_features/features_unlabeled.npz',
+    'UNLABELED_METADATA_PATH': '../data/00_metadata/dataset_unlabeled.xlsx',
     
-    'LABELED_FEATURES_PATH': 'features_labeled.npz',
-    'LABELED_METADATA_PATH': 'dataset_labeled.xlsx',
+    'LABELED_FEATURES_PATH': '../data/03_features/features_labeled.npz',
+    'LABELED_METADATA_PATH': '../data/00_metadata/dataset_labeled.xlsx',
 
     # --- Image Folders (Dash Assets) ---
     # These folders must be placed inside your dashboard/assets/ directory
