@@ -278,7 +278,19 @@ layout = html.Div([
                 dbc.Col(
                     dbc.Card([
                         dbc.CardHeader(
-                            html.H6("Distribution Matrix (Unlabeled Set)", className="fw-bold text-muted mb-3 px-3 pt-2 text-uppercase", style={"letterSpacing": "1px"}),
+                            html.Div([
+                                html.H6("Distribution Matrix (Unlabeled Set)", className="fw-bold text-muted mb-0 text-uppercase", style={"letterSpacing": "1px"}),
+                                html.Div([
+                                    dcc.Download(id="btn-download-excel-target"),
+                                    dbc.Button(
+                                        "📥 Download Clusters Distribution",
+                                        id="btn-download-excel",
+                                        color="success",
+                                        outline=True,
+                                        className="fw-bold sync-btn rounded-pill shadow-sm"
+                                    )
+                                ])
+                            ], className="d-flex justify-content-between align-items-center px-3"),
                             className="bg-transparent border-bottom-0 pt-4 pb-0"
                         ),
                         dbc.CardBody(id='ted-tabella-crosstab', className="p-4")
@@ -505,3 +517,44 @@ def auto_ottimizza_cluster_ted(n_clicks, n_neighbors, categorie):
             continue
            
     return best_k
+
+# ==========================================
+# DOWNOLOAD
+# ==========================================
+@callback(
+    Output("btn-download-excel-target", "data"),
+    Input("btn-download-excel", "n_clicks"),
+    [State('filter-main', 'value'),
+     State('ted-slider-clusters', 'value'),
+     State('ted-slider-neighbors', 'value')],
+    prevent_initial_call=True
+)
+def download_excel_spectral(n_clicks, categorie, n_clusters, n_neighbors):
+    if not n_clicks or not categorie:
+        raise PreventUpdate
+
+    # 1. Filtriamo i dati esattamente come nella visualizzazione della Fase 2
+    categorie_attive = [c for c in categorie if c != 'ALL']
+    maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
+    X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
+    df_ted = GLOBAL_DF[maschera_ted].copy()
+    
+    if len(X_ted) < n_clusters:
+        raise PreventUpdate
+        
+    # 2. Calcoliamo i cluster attuali
+    grafo = kneighbors_graph(X_ted, n_neighbors=n_neighbors, metric='cosine', mode='connectivity', include_self=True)
+    grafo = 0.5 * (grafo + grafo.T)
+    labels = SpectralClustering(n_clusters=n_clusters, affinity='precomputed', assign_labels='cluster_qr', random_state=42).fit_predict(grafo)
+    
+    df_ted['Cluster'] = labels.astype(str)
+    
+    # 3. Isoliamo solo le colonne richieste usando DATASET_CONFIG
+    colonna_id = DATASET_CONFIG['IMAGE_ID_COL']
+    df_download = df_ted[[colonna_id, 'Cluster']].copy()
+    
+    # Ordeniamo per rendere il file ordinato e leggibile
+    df_download = df_download.sort_values(by='Cluster')
+
+    # 4. Inviamo il file Excel all'utente tramite Dash
+    return dcc.send_data_frame(df_download.to_excel, "selected_clusters_spectral.xlsx", index=False)

@@ -282,7 +282,19 @@ layout = html.Div([
                 dbc.Col(
                     dbc.Card([
                         dbc.CardHeader(
-                            html.H6("Distribution Matrix (Unlabeled Set)", className="fw-bold text-muted mb-3 px-3 pt-2 text-uppercase", style={"letterSpacing": "1px"}),
+                            html.Div([
+                                html.H6("Distribution Matrix (Unlabeled Set)", className="fw-bold text-muted mb-0 text-uppercase", style={"letterSpacing": "1px"}),
+                                html.Div([
+                                    dcc.Download(id="btn-download-excel-target-uh"),
+                                    dbc.Button(
+                                        "📥 Download Selected Clusters (Excel)",
+                                        id="btn-download-excel-uh",
+                                        color="success",
+                                        outline=True,
+                                        className="fw-bold sync-btn rounded-pill shadow-sm"
+                                    )
+                                ])
+                            ], className="d-flex justify-content-between align-items-center px-3"),
                             className="bg-transparent border-bottom-0 pt-4 pb-0"
                         ),
                         dbc.CardBody(id='uh-tabella-crosstab-ted', className="p-4")
@@ -584,3 +596,41 @@ def hover_lab(hoverData): return get_hover_image_path(hoverData)
     Input('uh-grafico-3d-ted', 'hoverData')
 )
 def hover_ted(hoverData): return get_hover_image_path(hoverData)
+
+# ==========================================
+# DOWNLOAD
+# ==========================================
+@callback(
+    Output("btn-download-excel-target-uh", "data"),
+    Input("btn-download-excel-uh", "n_clicks"),
+    [State('uh-slider-umap-neighbors-ted', 'value'),
+     State('uh-slider-mcs-ted', 'value'), 
+     State('uh-slider-ms-ted', 'value'),
+     State('filter-main-uh', 'value')],
+    prevent_initial_call=True
+)
+def download_excel_uh(n_clicks, umap_neighbors, mcs, ms, categorie):
+    if not n_clicks or not categorie:
+        raise PreventUpdate
+
+    categorie_attive = [c for c in categorie if c != 'ALL']
+    maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
+    X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
+    df_ted = GLOBAL_DF[maschera_ted].copy()
+    
+    if len(X_ted) < mcs:
+        raise PreventUpdate
+
+    reducer_clustering = umap.UMAP(n_neighbors=umap_neighbors, min_dist=0.25, n_components=15, metric='cosine', random_state=42)
+    X_clustering = reducer_clustering.fit_transform(X_ted)
+    
+    clusterer = hdbscan.HDBSCAN(min_cluster_size=mcs, min_samples=ms, metric='euclidean', cluster_selection_method='eom')
+    labels = clusterer.fit_predict(X_clustering)
+    
+    df_ted['Cluster'] = [str(l) if l != -1 else 'Noise' for l in labels]
+    
+    colonna_id = DATASET_CONFIG['IMAGE_ID_COL']
+    df_download = df_ted[[colonna_id, 'Cluster']].copy()
+    df_download = df_download.sort_values(by='Cluster')
+
+    return dcc.send_data_frame(df_download.to_excel, "selected_clusters_hdbscan.xlsx", index=False)

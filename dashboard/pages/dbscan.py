@@ -257,7 +257,19 @@ layout = html.Div([
                 dbc.Col(
                     dbc.Card([
                         dbc.CardHeader(
-                            html.H6("Distribution Matrix (Unlabeled Set)", className="fw-bold text-muted mb-3 px-3 pt-2 text-uppercase", style={"letterSpacing": "1px"}),
+                            html.Div([
+                                html.H6("Distribution Matrix (Unlabeled Set)", className="fw-bold text-muted mb-0 text-uppercase", style={"letterSpacing": "1px"}),
+                                html.Div([
+                                    dcc.Download(id="btn-download-excel-target-dbscan"),
+                                    dbc.Button(
+                                        "📥 Download Clusters Distribution",
+                                        id="btn-download-excel-dbscan",
+                                        color="success",
+                                        outline=True,
+                                        className="fw-bold sync-btn rounded-pill shadow-sm"
+                                    )
+                                ])
+                            ], className="d-flex justify-content-between align-items-center px-3"),
                             className="bg-transparent border-bottom-0 pt-4 pb-0"
                         ),
                         dbc.CardBody(id='dbscan-tabella-crosstab-ted', className="p-4")
@@ -539,3 +551,38 @@ def auto_ottimizza_dbscan_misto(n_clicks, categorie):
     top5 = sorted(risultati, key=lambda x: x['score'], reverse=True)[:5]
     
     return best_eps, best_ms, top5
+
+# ==========================================
+# DOWNLOAD
+# ==========================================
+
+@callback(
+    Output("btn-download-excel-target-dbscan", "data"),
+    Input("btn-download-excel-dbscan", "n_clicks"),
+    [State('dbscan-slider-eps-ted', 'value'), 
+     State('dbscan-slider-min-samples-ted', 'value'),
+     State('filter-main-dbscan', 'value')],
+    prevent_initial_call=True
+)
+def download_excel_dbscan(n_clicks, eps, ms, categorie):
+    if not n_clicks or not categorie:
+        raise PreventUpdate
+
+    categorie_attive = [c for c in categorie if c != 'ALL']
+    maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
+    X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
+    df_ted = GLOBAL_DF[maschera_ted].copy()
+    
+    if len(X_ted) < ms:
+        raise PreventUpdate
+
+    clusterer = DBSCAN(eps=eps, min_samples=ms, metric='euclidean')
+    labels = clusterer.fit_predict(X_ted)
+    
+    df_ted['Cluster'] = [str(l) if l != -1 else 'Noise' for l in labels]
+    
+    colonna_id = DATASET_CONFIG['IMAGE_ID_COL']
+    df_download = df_ted[[colonna_id, 'Cluster']].copy()
+    df_download = df_download.sort_values(by='Cluster')
+
+    return dcc.send_data_frame(df_download.to_excel, "selected_clusters_dbscan.xlsx", index=False)
