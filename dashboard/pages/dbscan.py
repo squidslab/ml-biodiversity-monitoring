@@ -9,7 +9,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.metrics import fowlkes_mallows_score, silhouette_score
 from sklearn.metrics import fowlkes_mallows_score, adjusted_rand_score, adjusted_mutual_info_score
 
-from utils import EMBEDDINGS_GLOBALI, DF_GLOBALE, genera_grafico_3d, genera_tabella_crosstab, calcola_percorso_hover
+from utils import DATASET_CONFIG, GLOBAL_EMBEDDINGS, GLOBAL_DF, generate_3d_scatter_plot, generate_crosstab_table, get_hover_image_path
 
 dash.register_page(__name__, path='/dbscan', name='DBSCAN')
 
@@ -18,9 +18,9 @@ ORDINE_CATEGORIE = ['Labeled Set', 'Curated', 'Usable', 'Hardcore', 'Ruined Surf
 # ==========================================
 # PREPARAZIONE DATI INIZIALI
 # ==========================================
-maschera_labeled = DF_GLOBALE['UnifiedCategory'] == 'Labeled Set'
-X_labeled = EMBEDDINGS_GLOBALI[maschera_labeled]
-df_labeled = DF_GLOBALE[maschera_labeled].copy()
+maschera_labeled = GLOBAL_DF['UnifiedCategory'] == 'Labeled Set'
+X_labeled = GLOBAL_EMBEDDINGS[maschera_labeled]
+df_labeled = GLOBAL_DF[maschera_labeled].copy()
 
 # ==========================================
 # LAYOUT
@@ -267,11 +267,6 @@ layout = html.Div([
         ], width=12, lg=9)
     ])
 ], className="mb-5")
-
-# =========================================================
-# FASE 1: LABELED SET (Auto-Tuning e Visualizzazione)
-# =========================================================
-
 @callback(
     [Output('dbscan-slider-eps-lab', 'value', allow_duplicate=True),
      Output('dbscan-slider-min-samples-lab', 'value', allow_duplicate=True),
@@ -283,14 +278,14 @@ def auto_ottimizza_dbscan_labeled(n_clicks):
     if not n_clicks:
         raise PreventUpdate
 
+    colonna_target = DATASET_CONFIG['PREDICTION_COL']
     risultati = []
     best_score = -1
     best_eps = 0.3
     best_ms = 5
     
-    classi_uniche = df_labeled['Specie Predetta'].unique()
+    classi_uniche = df_labeled[colonna_target].unique()
     
-    # Grid Search per DBSCAN classico (Distanza Euclidea)
     for eps in np.arange(0.1, 1.05, 0.05):
         for ms in range(5, 31, 2):
             clusterer = DBSCAN(eps=eps, min_samples=ms, metric='euclidean')
@@ -302,10 +297,9 @@ def auto_ottimizza_dbscan_labeled(n_clicks):
                 
             scores_simulati = []
             
-            # LOCO Validation (Robustezza)
             for classe_da_ignorare in classi_uniche:
-                maschera_loco = df_labeled['Specie Predetta'] != classe_da_ignorare
-                labels_reali = df_labeled[maschera_loco]['Specie Predetta']
+                maschera_loco = df_labeled[colonna_target] != classe_da_ignorare
+                labels_reali = df_labeled[maschera_loco][colonna_target]
                 labels_pred = labels[maschera_loco]
                 
                 fmi = fowlkes_mallows_score(labels_reali, labels_pred)
@@ -313,7 +307,7 @@ def auto_ottimizza_dbscan_labeled(n_clicks):
                 
             mean_fmi = np.mean(scores_simulati)
             score_finale = mean_fmi * (1.0 - noise_ratio)
-            fmi_base = fowlkes_mallows_score(df_labeled['Specie Predetta'], labels)
+            fmi_base = fowlkes_mallows_score(df_labeled[colonna_target], labels)
             
             risultati.append({
                 'eps': round(eps, 2), 'ms': ms, 'fmi': fmi_base, 
@@ -339,6 +333,7 @@ def auto_ottimizza_dbscan_labeled(n_clicks):
      Input('store-top5-dbscan-lab', 'data')]
 )
 def aggiorna_dbscan_labeled(eps, ms, top5_data):
+    colonna_target = DATASET_CONFIG['PREDICTION_COL']
     clusterer = DBSCAN(eps=eps, min_samples=ms, metric='euclidean')
     labels = clusterer.fit_predict(X_labeled)
     
@@ -347,17 +342,17 @@ def aggiorna_dbscan_labeled(eps, ms, top5_data):
     df_plot['Cluster'] = [str(l) if l != -1 else 'Noise' for l in labels]
     
     noise_ratio = np.sum(labels == -1) / len(labels)
-    fmi = fowlkes_mallows_score(df_plot['Specie Predetta'], labels)
+    fmi = fowlkes_mallows_score(df_plot[colonna_target], labels)
  
     if df_plot.empty:
         return dash.no_update, "No data (All of it is classified as Noise)", html.Div("Tutte le foto sono state etichettate come Noise.")
 
-    fig = genera_grafico_3d(df_plot, " ")
+    fig = generate_3d_scatter_plot(df_plot, title=" ")
     
     if 'Noise' in df_plot['Cluster'].values:
         fig.update_traces(selector=dict(name="Noise"), marker=dict(color='rgba(150, 150, 150, 0.3)'))
 
-    tabella = genera_tabella_crosstab(df_plot)
+    tabella = generate_crosstab_table(df_plot)
     
     elementi_box = [
         html.Hr(className="mb-4"),
@@ -376,11 +371,6 @@ def aggiorna_dbscan_labeled(eps, ms, top5_data):
             )
             
     return fig, tabella, html.Div(elementi_box)
-
-
-# =========================================================
-# GESTIONE FILTRI E SYNC
-# =========================================================
 
 @callback(
     [Output('filter-main-dbscan', 'value'),
@@ -408,11 +398,6 @@ def gestisci_input_dbscan_ted(filtri_selezionati, n_clicks, lab_eps, lab_ms, ted
 
     return nuovi_filtri, ted_eps, ted_ms
 
-
-# =========================================================
-# FASE 2: UNLABELED SET
-# =========================================================
-
 @callback(
     [Output('dbscan-grafico-3d-ted', 'figure'), 
      Output('dbscan-tabella-crosstab-ted', 'children'), 
@@ -427,9 +412,9 @@ def aggiorna_dbscan_ted(eps, ms, categorie, top5_data):
         return dash.no_update, "No data", html.Div("Select at least one filter")
 
     categorie_attive = [c for c in categorie if c != 'ALL']
-    maschera_ted = DF_GLOBALE['UnifiedCategory'].isin(categorie_attive)
-    X_ted = EMBEDDINGS_GLOBALI[maschera_ted]
-    df_ted = DF_GLOBALE[maschera_ted].copy()
+    maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
+    X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
+    df_ted = GLOBAL_DF[maschera_ted].copy()
     
     if len(X_ted) < ms:
         return dash.no_update, "Not enought data", html.Div("Dati insufficienti.")
@@ -442,7 +427,6 @@ def aggiorna_dbscan_ted(eps, ms, categorie, top5_data):
     noise_ratio = np.sum(labels == -1) / len(labels)
     num_clusters = len(set(labels)) - (1 if -1 in labels else 0)
     
-    # Calcolo Silhouette Score SOLO sui punti che non sono Noise
     mask_no_noise = labels != -1
     try:
         if num_clusters > 1:
@@ -453,12 +437,12 @@ def aggiorna_dbscan_ted(eps, ms, categorie, top5_data):
     except Exception:
         sil_text = "Errore Calcolo"
 
-    fig = genera_grafico_3d(df_ted, " ")
+    fig = generate_3d_scatter_plot(df_ted, title=" ")
     
     if 'Noise' in df_ted['Cluster'].values:
         fig.update_traces(selector=dict(name="Noise"), marker=dict(color='rgba(150, 150, 150, 0.3)'))
 
-    tabella = genera_tabella_crosstab(df_ted)
+    tabella = generate_crosstab_table(df_ted)
 
     elementi_box = [
         html.Hr(className="mb-4"),
@@ -468,7 +452,6 @@ def aggiorna_dbscan_ted(eps, ms, categorie, top5_data):
         html.P(f"Silhouette Score: {sil_text}", className="text-success fw-bold")
     ]
     
-    # Aggiunta della Top 5 se l'auto-tuning è stato eseguito e siamo sui parametri migliori
     if top5_data and eps == top5_data[0]['eps'] and ms == top5_data[0]['ms']:
         elementi_box.append(html.Hr(className="my-2"))
         elementi_box.append(html.H6("Best Values Based on Labeled:", className="mb-2 fw-bold text-uppercase text-muted", style={"letterSpacing": "1px"}))
@@ -480,26 +463,17 @@ def aggiorna_dbscan_ted(eps, ms, categorie, top5_data):
     
     return fig, tabella, html.Div(elementi_box)
 
-
-# =========================================================
-# CALLBACK HOVER (Identiche per le due fasi)
-# =========================================================
-
 @callback(
     [Output('dbscan-hover-image-lab', 'src'), Output('dbscan-hover-text-lab', 'children')],
     Input('dbscan-grafico-3d-lab', 'hoverData')
 )
-def hover_lab(hoverData): return calcola_percorso_hover(hoverData)
+def hover_lab(hoverData): return get_hover_image_path(hoverData)
 
 @callback(
     [Output('dbscan-hover-image-ted', 'src'), Output('dbscan-hover-text-ted', 'children')],
     Input('dbscan-grafico-3d-ted', 'hoverData')
 )
-def hover_ted(hoverData): return calcola_percorso_hover(hoverData)
-
-# =========================================================
-# AUTO-TUNING FASE 2 (Misto: Unlabeled/Curated + Labeled)
-# =========================================================
+def hover_ted(hoverData): return get_hover_image_path(hoverData)
 
 @callback(
     [Output('dbscan-slider-eps-ted', 'value', allow_duplicate=True),
@@ -513,36 +487,33 @@ def auto_ottimizza_dbscan_misto(n_clicks, categorie):
     if not n_clicks or not categorie:
         raise PreventUpdate
 
+    colonna_target = DATASET_CONFIG['PREDICTION_COL']
     categorie_attive = [c for c in categorie if c != 'ALL']
-    maschera_totale = DF_GLOBALE['UnifiedCategory'].isin(categorie_attive)
+    maschera_totale = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
     
-    df_subset = DF_GLOBALE[maschera_totale].copy()
-    X_subset = EMBEDDINGS_GLOBALI[maschera_totale]
+    df_subset = GLOBAL_DF[maschera_totale].copy()
+    X_subset = GLOBAL_EMBEDDINGS[maschera_totale]
 
     maschera_labeled_interna = df_subset['UnifiedCategory'] == 'Labeled Set'
     if not maschera_labeled_interna.any():
         return dash.no_update, dash.no_update, dash.no_update
 
-    labels_reali_labeled = df_subset[maschera_labeled_interna]['Specie Predetta']
+    labels_reali_labeled = df_subset[maschera_labeled_interna][colonna_target]
 
     risultati = []
     best_score = -1
     best_eps = 0.3
     best_ms = 5
     
-    # 3. Grid Search
     for eps in np.arange(0.1, 1.05, 0.05):
         for ms in range(5, 31, 2):
-            # Il clustering avviene su TUTTO il subset (Labeled + Unlabeled/Curated)
             clusterer = DBSCAN(eps=eps, min_samples=ms, metric='euclidean')
             labels_totali = clusterer.fit_predict(X_subset)
             
             noise_ratio_totale = np.sum(labels_totali == -1) / len(labels_totali)
             
-            # Estraiamo SOLO le predizioni relative ai dati Labeled per validarle
             labels_pred_labeled = labels_totali[maschera_labeled_interna]
             
-            # Calcolo delle Metriche richieste
             ari = adjusted_rand_score(labels_reali_labeled, labels_pred_labeled)
             ami = adjusted_mutual_info_score(labels_reali_labeled, labels_pred_labeled)
             fmi = fowlkes_mallows_score(labels_reali_labeled, labels_pred_labeled)
@@ -560,13 +531,11 @@ def auto_ottimizza_dbscan_misto(n_clicks, categorie):
                 'score': score_finale
             })
             
-            # Aggiornamento dei migliori parametri
             if score_finale > best_score:
                 best_score = score_finale
                 best_eps = round(eps, 2)
                 best_ms = ms
                 
-    # Estraiamo la Top 5
     top5 = sorted(risultati, key=lambda x: x['score'], reverse=True)[:5]
     
     return best_eps, best_ms, top5

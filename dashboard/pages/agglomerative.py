@@ -8,7 +8,7 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import adjusted_mutual_info_score, adjusted_rand_score, silhouette_score
 from dash.exceptions import PreventUpdate
 
-from utils import EMBEDDINGS_GLOBALI, DF_GLOBALE, genera_grafico_3d, genera_tabella_crosstab, calcola_percorso_hover
+from utils import DATASET_CONFIG, GLOBAL_EMBEDDINGS, GLOBAL_DF, generate_3d_scatter_plot, generate_crosstab_table, get_hover_image_path
 
 dash.register_page(__name__, path='/agglomerative', name='Agglomerative Clustering')
 
@@ -18,9 +18,9 @@ ORDINE_CATEGORIE = ['Curated', 'Usable', 'Hardcore', 'Ruined Surface', 'Hands', 
 # PREPARAZIONE DATI INIZIALI
 # ==========================================
 # Labeled Set 
-maschera_test = DF_GLOBALE['is_test_set'] == True
-X_labeled = EMBEDDINGS_GLOBALI[maschera_test]
-df_labeled = DF_GLOBALE[maschera_test].copy()
+maschera_test = GLOBAL_DF['is_labeled_set'] == True
+X_labeled = GLOBAL_EMBEDDINGS[maschera_test]
+df_labeled = GLOBAL_DF[maschera_test].copy()
 
 # Opzioni per il dropdown del Linkage
 LINKAGE_OPTIONS = [
@@ -220,6 +220,7 @@ layout = html.Div([
     ])
 ], className="mb-5")
 
+# ==========================================
 # Labeled Set: Aggiornamento Grafico, Tabella e Metriche
 # ==========================================
 @callback(
@@ -227,11 +228,11 @@ layout = html.Div([
      Output('agg-tabella-crosstab', 'children'), 
      Output('agg-metriche-box', 'children')],
     [Input('agg-slider-clusters', 'value'), 
-     Input('agg-dropdown-linkage', 'value'), # Sostituisce neighbors
+     Input('agg-dropdown-linkage', 'value'), 
      Input('store-top5-labeled-agg', 'data')]
 )
 def aggiorna_agg_labeled(n_clusters, linkage, top5_data):
-    # Il metodo 'ward' richiede tassativamente la distanza euclidea
+    colonna_target = DATASET_CONFIG['PREDICTION_COL']
     metrica = 'euclidean' if linkage == 'ward' else 'cosine'
     
     clusterer = AgglomerativeClustering(n_clusters=n_clusters, metric=metrica, linkage=linkage)
@@ -240,11 +241,11 @@ def aggiorna_agg_labeled(n_clusters, linkage, top5_data):
     df_plot = df_labeled.copy()
     df_plot['Cluster'] = labels.astype(str)
     
-    fig = genera_grafico_3d(df_plot, "Labeled Set (Agglomerative)")
-    tabella = genera_tabella_crosstab(df_plot) 
+    fig = generate_3d_scatter_plot(df_plot, title="Labeled Set (Agglomerative)")
+    tabella = generate_crosstab_table(df_plot) 
     
-    ami = adjusted_mutual_info_score(df_plot['Specie Predetta'], labels)
-    ari = adjusted_rand_score(df_plot['Specie Predetta'], labels)
+    ami = adjusted_mutual_info_score(df_plot[colonna_target], labels)
+    ari = adjusted_rand_score(df_plot[colonna_target], labels)
     
     elementi_box = [
         html.H6("Metriche Labeled:", className="text-success fw-bold"), 
@@ -278,11 +279,11 @@ def auto_ottimizza_linkage_labeled(n_clicks, k_clusters):
     if not n_clicks:
         raise PreventUpdate
 
+    colonna_target = DATASET_CONFIG['PREDICTION_COL']
     risultati = []
     best_score = -1
     best_linkage = 'ward'
     
-    # Esploriamo le combinazioni di Linkage e Metrica possibili
     combinazioni = [
         ('ward', 'euclidean'),
         ('average', 'cosine'), ('average', 'euclidean'),
@@ -293,8 +294,8 @@ def auto_ottimizza_linkage_labeled(n_clicks, k_clusters):
     for link, metrica in combinazioni:
         labels = AgglomerativeClustering(n_clusters=k_clusters, metric=metrica, linkage=link).fit_predict(X_labeled)
         
-        ami = adjusted_mutual_info_score(df_labeled['Specie Predetta'], labels)
-        ari = adjusted_rand_score(df_labeled['Specie Predetta'], labels)
+        ami = adjusted_mutual_info_score(df_labeled[colonna_target], labels)
+        ari = adjusted_rand_score(df_labeled[colonna_target], labels)
         score = (ami + ari) / 2.0
         
         risultati.append({'linkage': link, 'metrica': metrica, 'ami': ami, 'ari': ari, 'score': score, 'k_clusters': k_clusters}) 
@@ -315,7 +316,7 @@ def auto_ottimizza_linkage_labeled(n_clicks, k_clusters):
     Input('agg-grafico-3d', 'hoverData')
 )
 def aggiorna_hover_agg_labeled(hoverData):
-    return calcola_percorso_hover(hoverData)
+    return get_hover_image_path(hoverData)
 
 
 # UNlabeled Set: Aggiornamento Grafico, Tabella e Metriche
@@ -333,9 +334,9 @@ def aggiorna_agg_ted(categorie, n_clusters, linkage):
         return px.scatter_3d(title="Seleziona almeno un filtro"), "Nessun dato", html.Div("Seleziona almeno un filtro")
 
     categorie_attive = [c for c in categorie if c != 'ALL']
-    maschera_ted = DF_GLOBALE['UnifiedCategory'].isin(categorie_attive)
-    X_ted = EMBEDDINGS_GLOBALI[maschera_ted]
-    df_ted = DF_GLOBALE[maschera_ted].copy()
+    maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
+    X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
+    df_ted = GLOBAL_DF[maschera_ted].copy()
     
     if len(X_ted) < n_clusters:
         return px.scatter_3d(title=f"Dati insufficienti ({len(X_ted)} immagini)"), "Nessun dato", html.Div("Pochi dati")
@@ -344,8 +345,8 @@ def aggiorna_agg_ted(categorie, n_clusters, linkage):
     labels = AgglomerativeClustering(n_clusters=n_clusters, metric=metrica, linkage=linkage).fit_predict(X_ted)
     df_ted['Cluster'] = labels.astype(str)
     
-    fig = genera_grafico_3d(df_ted, titolo="Unlabeled Set (Agglomerative)")
-    tabella = genera_tabella_crosstab(df_ted)
+    fig = generate_3d_scatter_plot(df_ted, title="Unlabeled Set (Agglomerative)")
+    tabella = generate_crosstab_table(df_ted)
     
     try:
         score = silhouette_score(X_ted, labels, metric=metrica)
@@ -367,7 +368,7 @@ def aggiorna_agg_ted(categorie, n_clusters, linkage):
     Input('ted-grafico-3d-agg', 'hoverData')
 )
 def mostra_immagine_hover_agg(hoverData):
-    return calcola_percorso_hover(hoverData)
+    return get_hover_image_path(hoverData)
 
 # UNlabeled Set: Gestione Filtri "Seleziona Tutti" e Sincronizzazione Parametri
 # ==========================================
@@ -412,8 +413,8 @@ def auto_ottimizza_cluster_agg_ted(n_clicks, linkage, categorie):
         raise PreventUpdate
 
     categorie_attive = [c for c in categorie if c != 'ALL']
-    maschera_ted = (~DF_GLOBALE['is_test_set']) & (DF_GLOBALE['UnifiedCategory'].isin(categorie_attive))
-    X_ted = EMBEDDINGS_GLOBALI[maschera_ted]
+    maschera_ted = (~GLOBAL_DF['is_labeled_set']) & (GLOBAL_DF['UnifiedCategory'].isin(categorie_attive))
+    X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
     
     if len(X_ted) < 10: 
         raise PreventUpdate

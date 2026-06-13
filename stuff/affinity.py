@@ -8,16 +8,14 @@ from sklearn.cluster import AffinityPropagation
 from sklearn.metrics import fowlkes_mallows_score, silhouette_score, pairwise_distances
 from sklearn.decomposition import PCA
 
-# Assicurati di importare le variabili e le funzioni dal tuo file utils
 from utils import (
-    DF_GLOBALE, EMBEDDINGS_GLOBALI, 
-    genera_grafico_3d, genera_tabella_crosstab, calcola_percorso_hover
+    GLOBAL_DF, GLOBAL_EMBEDDINGS, 
+    generate_3d_scatter_plot, generate_crosstab_table, get_hover_image_path
 )
 
-# Creiamo i dataset Labeled filtrando i dati globali all'avvio della pagina
-maschera_labeled = DF_GLOBALE['UnifiedCategory'] == 'Labeled Set'
-X_labeled = EMBEDDINGS_GLOBALI[maschera_labeled]
-df_labeled = DF_GLOBALE[maschera_labeled].copy()
+maschera_labeled = GLOBAL_DF['UnifiedCategory'] == 'Labeled Set'
+X_labeled = GLOBAL_EMBEDDINGS[maschera_labeled]
+df_labeled = GLOBAL_DF[maschera_labeled].copy()
 
 dash.register_page(__name__, path='/affinity', name='Affinity Propagation')
 
@@ -281,8 +279,8 @@ def aggiorna_aff_labeled(q, damp, top5_data):
     
     fmi = fowlkes_mallows_score(df_plot['Specie Predetta'], labels)
     
-    fig = genera_grafico_3d(df_plot, "Spazio Latente Labeled Set (Affinity + PCA)")
-    tabella = genera_tabella_crosstab(df_plot)
+    fig = generate_3d_scatter_plot(df_plot, "Spazio Latente Labeled Set (Affinity + PCA)")
+    tabella = generate_crosstab_table(df_plot)
     
     elementi_box = [
         html.H6("Metriche Affinity:", className="text-success fw-bold"), 
@@ -348,9 +346,9 @@ def aggiorna_aff_ted(q, damp, categorie):
         return dash.no_update, "Nessun dato", html.Div("Seleziona almeno un filtro")
 
     categorie_attive = [c for c in categorie if c != 'ALL']
-    maschera_ted = DF_GLOBALE['UnifiedCategory'].isin(categorie_attive)
-    X_ted = EMBEDDINGS_GLOBALI[maschera_ted]
-    df_ted = DF_GLOBALE[maschera_ted].copy()
+    maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
+    X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
+    df_ted = GLOBAL_DF[maschera_ted].copy()
     
     if len(X_ted) < 5:
         return dash.no_update, "Pochi dati", html.Div("Dati insufficienti.")
@@ -376,8 +374,8 @@ def aggiorna_aff_ted(q, damp, categorie):
     except Exception:
         sil_text = "Errore Calcolo"
 
-    fig = genera_grafico_3d(df_ted, "Scoperta Classi (Affinity + PCA)")
-    tabella = genera_tabella_crosstab(df_ted)
+    fig = generate_3d_scatter_plot(df_ted, "Scoperta Classi (Affinity + PCA)")
+    tabella = generate_crosstab_table(df_ted)
 
     metriche = html.Div([
         html.H6(f"Immagini analizzate: {len(X_ted)}", className="text-secondary fw-bold"),
@@ -395,10 +393,10 @@ def aggiorna_aff_ted(q, damp, categorie):
     [Output('aff-hover-image-lab', 'src'), Output('aff-hover-text-lab', 'children')],
     Input('aff-grafico-3d-lab', 'hoverData')
 )
-def hover_lab(hoverData): return calcola_percorso_hover(hoverData)
+def hover_lab(hoverData): return get_hover_image_path(hoverData)
 
 @callback(
     [Output('aff-hover-image-ted', 'src'), Output('aff-hover-text-ted', 'children')],
     Input('aff-grafico-3d-ted', 'hoverData')
 )
-def hover_ted(hoverData): return calcola_percorso_hover(hoverData)
+def hover_ted(hoverData): return get_hover_image_path(hoverData)

@@ -1,3 +1,42 @@
+"""
+=============================================================================
+GENERIC DATA LOADING UTILITIES FOR CLUSTERING PIPELINE
+=============================================================================
+
+This module provides a generic, plug-and-play way to load features (.npz) 
+and metadata (.xlsx) into the clustering interface. 
+
+HOW TO USE THIS MODULE FOR YOUR OWN DATA:
+Modify the `DATASET_CONFIG` dictionary below to point to your files.
+You can use this pipeline in three different scenarios:
+
+1. BOTH UNLABELED AND LABELED DATA (Default):
+   - Provide paths for both unlabeled and labeled features/metadata.
+   - The pipeline will combine them and use the labeled data as a reference.
+
+2. ONLY UNLABELED DATA:
+   - Provide paths for `UNLABELED_FEATURES_PATH` and `UNLABELED_METADATA_PATH`.
+   - Set the labeled paths to `None` or an empty string `""`.
+   - The pipeline will cluster and visualize only the unlabeled data.
+
+3. ONLY LABELED DATA:
+   - Provide paths for `LABELED_FEATURES_PATH` and `LABELED_METADATA_PATH`.
+   - Set the unlabeled paths to `None` or an empty string `""`.
+   - The pipeline will load only the labeled data, useful for exploring 
+     ground-truth distributions.
+     
+Note: Ensure your Excel files contain the columns specified in `IMAGE_ID_COL`,
+`CATEGORY_COL`, and `PREDICTION_COL`. If they don't exist, the script will 
+safely create placeholders.
+
+*** IMPORTANT NOTE ON IMAGE PREVIEWS ***
+To see the image previews when hovering over the 3D plot points, you must 
+place your image folders inside your dashboard's `assets/` directory.
+Replace any existing folders with your own, ensuring their names exactly 
+match the `UNLABELED_IMAGES_DIR` and `LABELED_IMAGES_DIR` variables configured below.
+=============================================================================
+"""
+
 import numpy as np
 import pandas as pd
 import os
@@ -8,149 +47,243 @@ from sklearn.preprocessing import normalize
 from sklearn.decomposition import PCA
 
 # ==========================================
-# COSTANTI E PERCORSI FILE
+# DATASET CONFIGURATION
 # ==========================================
-NPZ_FILE_TED = 'features_resnet_custom_cropped_ALL_DATA.npz'
-EXCEL_FILE_TED = 'dataset.xlsx'
-NPZ_FILE_TEST = 'features_resnet_custom_base_TEST.npz'
-EXCEL_FILE_TEST = 'Registro_Dataset_ResNet18.xlsx'
+DATASET_CONFIG = {
+    # --- File Paths ---
+    # Set to None or "" if a specific subset is not available
+    'UNLABELED_FEATURES_PATH': 'features_unlabeled.npz',
+    'UNLABELED_METADATA_PATH': 'dataset_unlabeled.xlsx',
+    
+    'LABELED_FEATURES_PATH': 'features_labeled.npz',
+    'LABELED_METADATA_PATH': 'dataset_labeled.xlsx',
+
+    # --- Image Folders (Dash Assets) ---
+    # These folders must be placed inside your dashboard/assets/ directory
+    'UNLABELED_IMAGES_DIR': 'unlabeled_images',
+    'LABELED_IMAGES_DIR': 'labeled_images',
+    
+    # --- Column Names in Metadata (Excel) ---
+    'IMAGE_ID_COL': 'image name',           # Column used to match .npz names with Excel rows
+    'CATEGORY_COL': 'Categoria',            # Column used for the UI filtering system
+    'PREDICTION_COL': 'Specie Predetta'     # Column containing the classification label
+}
 
 # ==========================================
-# FUNZIONE PRINCIPALE DI CARICAMENTO DATI
+# MAIN LOADING FUNCTION
 # ==========================================
-def carica_tutti_i_dati():
+def load_features_and_metadata():
     """
-    Carica i file .npz, calcola la PCA 3D per i grafici, legge i file Excel
-    e restituisce la matrice degli embedding e il DataFrame globale.
+    Loads .npz features and Excel metadata based on DATASET_CONFIG.
+    Handles scenarios with missing labeled or unlabeled sets dynamically.
+    
+    Returns:
+        normalized_embeddings (numpy.ndarray): L2 normalized feature matrix.
+        global_dataframe (pandas.DataFrame): Combined metadata with 3D PCA coordinates.
     """
     try:
-        data_ted = np.load(NPZ_FILE_TED)
-        data_test = np.load(NPZ_FILE_TEST)
-        emb_all = np.vstack((data_ted['embeddings'], data_test['embeddings']))
-        names_all = np.concatenate((data_ted['names'], data_test['names']))
+        embeddings_list = []
+        image_names_list = []
+        metadata_dfs = []
+        labeled_image_names = set()
+
+        # ---------------------------------------------------------
+        # 1. PROCESS UNLABELED DATA (If available)
+        # ---------------------------------------------------------
+        if DATASET_CONFIG['UNLABELED_FEATURES_PATH'] and os.path.exists(DATASET_CONFIG['UNLABELED_FEATURES_PATH']):
+            unlabeled_npz = np.load(DATASET_CONFIG['UNLABELED_FEATURES_PATH'])
+            embeddings_list.append(unlabeled_npz['embeddings'])
+            image_names_list.append(unlabeled_npz['names'])
+            
+            if DATASET_CONFIG['UNLABELED_METADATA_PATH'] and os.path.exists(DATASET_CONFIG['UNLABELED_METADATA_PATH']):
+                unlabeled_metadata_df = pd.read_excel(DATASET_CONFIG['UNLABELED_METADATA_PATH'])
+                
+                # Safe column checking
+                if DATASET_CONFIG['CATEGORY_COL'] not in unlabeled_metadata_df.columns:
+                    unlabeled_metadata_df[DATASET_CONFIG['CATEGORY_COL']] = 'Not Specified'
+                if DATASET_CONFIG['PREDICTION_COL'] not in unlabeled_metadata_df.columns:
+                    unlabeled_metadata_df[DATASET_CONFIG['PREDICTION_COL']] = 'Unknown'
+                    
+                clean_unlabeled_df = unlabeled_metadata_df[[
+                    DATASET_CONFIG['IMAGE_ID_COL'], 
+                    DATASET_CONFIG['CATEGORY_COL'], 
+                    DATASET_CONFIG['PREDICTION_COL']
+                ]].copy()
+                metadata_dfs.append(clean_unlabeled_df)
+
+        # 2. PROCESS LABELED DATA
+        if DATASET_CONFIG['LABELED_FEATURES_PATH'] and os.path.exists(DATASET_CONFIG['LABELED_FEATURES_PATH']):
+            labeled_npz = np.load(DATASET_CONFIG['LABELED_FEATURES_PATH'])
+            embeddings_list.append(labeled_npz['embeddings'])
+            image_names_list.append(labeled_npz['names'])
+            
+            labeled_image_names = set(labeled_npz['names'])
+            
+            if DATASET_CONFIG['LABELED_METADATA_PATH'] and os.path.exists(DATASET_CONFIG['LABELED_METADATA_PATH']):
+                labeled_metadata_df = pd.read_excel(DATASET_CONFIG['LABELED_METADATA_PATH'])
+                
+                if 'Classe' in labeled_metadata_df.columns:
+                    if DATASET_CONFIG['PREDICTION_COL'] in labeled_metadata_df.columns:
+                        labeled_metadata_df = labeled_metadata_df.drop(columns=[DATASET_CONFIG['PREDICTION_COL']])
+                    labeled_metadata_df = labeled_metadata_df.rename(columns={'Classe': DATASET_CONFIG['PREDICTION_COL']})
+                elif DATASET_CONFIG['PREDICTION_COL'] not in labeled_metadata_df.columns:
+                    labeled_metadata_df[DATASET_CONFIG['PREDICTION_COL']] = 'Unknown'
+                    
+                if 'Nome File' in labeled_metadata_df.columns:
+                    if DATASET_CONFIG['IMAGE_ID_COL'] in labeled_metadata_df.columns:
+                        labeled_metadata_df = labeled_metadata_df.drop(columns=[DATASET_CONFIG['IMAGE_ID_COL']])
+                    labeled_metadata_df = labeled_metadata_df.rename(columns={'Nome File': DATASET_CONFIG['IMAGE_ID_COL']})
+                
+                if DATASET_CONFIG['PREDICTION_COL'] in labeled_metadata_df.columns:
+                    labeled_metadata_df[DATASET_CONFIG['PREDICTION_COL']] = 'labeled_' + labeled_metadata_df[DATASET_CONFIG['PREDICTION_COL']].astype(str)
+                    
+                clean_labeled_df = labeled_metadata_df[[
+                    DATASET_CONFIG['IMAGE_ID_COL'], 
+                    DATASET_CONFIG['PREDICTION_COL']
+                ]].copy()
+                
+                clean_labeled_df[DATASET_CONFIG['CATEGORY_COL']] = 'Labeled Set'
+                metadata_dfs.append(clean_labeled_df)
+
+        # ---------------------------------------------------------
+        # 3. COMBINE AND NORMALIZE
+        # ---------------------------------------------------------
+        if not embeddings_list:
+            raise ValueError("No data loaded. Check your file paths in DATASET_CONFIG.")
+
+        combined_embeddings = np.vstack(embeddings_list)
+        combined_image_names = np.concatenate(image_names_list)
         
-        embeddings_norm = normalize(emb_all, norm='l2')
+        normalized_embeddings = normalize(combined_embeddings, norm='l2')
+
+        # ---------------------------------------------------------
+        # 4. COMPUTE 3D PCA FOR VISUALIZATION
+        # ---------------------------------------------------------
+        pca_3d_coordinates = PCA(n_components=3).fit_transform(normalized_embeddings)
+        global_dataframe = pd.DataFrame(pca_3d_coordinates, columns=['x', 'y', 'z'])
+        global_dataframe[DATASET_CONFIG['IMAGE_ID_COL']] = combined_image_names
         
-        # PCA per i grafici 
-        coords_3d = PCA(n_components=3).fit_transform(embeddings_norm)
-        df_global = pd.DataFrame(coords_3d, columns=['x', 'y', 'z'])
-        df_global['image name'] = names_all
+        # Boolean mask for UI logic
+        global_dataframe['is_labeled_set'] = global_dataframe[DATASET_CONFIG['IMAGE_ID_COL']].apply(
+            lambda img_name: img_name in labeled_image_names
+        )
+
+        # ---------------------------------------------------------
+        # 5. MERGE METADATA AND CREATE UNIFIED CATEGORY
+        # ---------------------------------------------------------
+        if metadata_dfs:
+            combined_metadata_df = pd.concat(metadata_dfs, ignore_index=True)
+            global_dataframe = global_dataframe.merge(
+                combined_metadata_df, 
+                on=DATASET_CONFIG['IMAGE_ID_COL'], 
+                how='left'
+            )
         
-        # Maschera Test Set
-        nomi_test = set(data_test['names'])
-        df_global['is_test_set'] = df_global['image name'].apply(lambda x: x in nomi_test)
-        
-        # Merge Excel TED
-        df_excel_ted = pd.read_excel(EXCEL_FILE_TED)
-        df_excel_ted['datasetCategory'] = df_excel_ted['datasetCategory'].fillna('Vuoto')
-        df_excel_ted['personalAnnotation'] = df_excel_ted['personalAnnotation'].fillna('Vuoto')
-        df_ted_clean = df_excel_ted[['image name', 'datasetCategory', 'personalAnnotation', 'Specie Predetta']]
-        
-        # Merge Excel TEST
-        df_excel_test = pd.read_excel(EXCEL_FILE_TEST)
-        df_excel_test = df_excel_test.rename(columns={'Classe': 'Specie Predetta', 'Nome File': 'image name'})
-        df_excel_test['Specie Predetta'] = 'labeled_' + df_excel_test['Specie Predetta'].astype(str)
-        df_excel_test['personalAnnotation'] = 'Vuoto'
-        df_excel_test['datasetCategory'] = 'Labeled Set'
-        df_test_clean = df_excel_test[['image name', 'datasetCategory', 'personalAnnotation', 'Specie Predetta']]
-        
-        df_excel_all = pd.concat([df_ted_clean, df_test_clean], ignore_index=True)
-        df_global = df_global.merge(df_excel_all, on='image name', how='left')
-        
-        df_global['Specie Predetta'] = df_global['Specie Predetta'].fillna('Sconosciuta')
-        def assegna_categoria_unificata(row):
-            if row['is_test_set']:
+        # Fill NaN values resulting from the merge
+        global_dataframe[DATASET_CONFIG['PREDICTION_COL']] = global_dataframe[DATASET_CONFIG['PREDICTION_COL']].fillna('Unknown')
+        global_dataframe[DATASET_CONFIG['CATEGORY_COL']] = global_dataframe[DATASET_CONFIG['CATEGORY_COL']].fillna('Unknown')
+
+        def assign_unified_category(row):
+            """Helper function to clean up and standardize category names for the UI."""
+            if row['is_labeled_set']:
                 return 'Labeled Set'
             
-            cat = str(row['datasetCategory']).strip().upper()
-            ann = str(row['personalAnnotation']).strip().lower()
+            raw_category = str(row[DATASET_CONFIG['CATEGORY_COL']]).strip()
+            if raw_category.lower() in ['nan', 'none', '']:
+                return 'Unknown'
+                
+            return raw_category.title()
             
-            if ann == 'curated': return 'Curated'
-            if cat == 'USABLE' and ann == 'vuoto': return 'Usable'
-            if cat == 'HARDCORE' and ann == 'vuoto': return 'Hardcore'
-            if ann == 'ruined_surface': return 'Ruined Surface'
-            if ann == 'hands': return 'Hands'
-            if ann == 'others': return 'Others'
-            
-            return 'Sconosciuta' 
-        
-        df_global['UnifiedCategory'] = df_global.apply(assegna_categoria_unificata, axis=1)
-        
-        return embeddings_norm, df_global
-        
-    except Exception as e:
-        print(f"ERRORE CRITICO in utils.py: {e}")
-        return np.array([]), pd.DataFrame()
+        global_dataframe['UnifiedCategory'] = global_dataframe.apply(assign_unified_category, axis=1)
 
+        return normalized_embeddings, global_dataframe
+
+    except Exception as e:
+        print(f"CRITICAL ERROR in generic_utils.py: {e}")
+        return np.array([]), pd.DataFrame()
+    
 # ==========================================
-# COMPONENTI UI CONDIVISI (Grafici e Tabelle)
+# SHARED UI COMPONENTS (Charts and Tables)
 # ==========================================
-def genera_grafico_3d(df_plot, titolo="Spazio Latente 3D"):
+def generate_3d_scatter_plot(df_plot, title="3D Latent Space"):
     """
-    Riceve un DataFrame (con x, y, z, Cluster, image name, Specie Predetta)
-    e restituisce una figura Plotly standardizzata.
+    Takes a DataFrame and returns a standardized Plotly figure,
+    dynamically reading column names from DATASET_CONFIG.
     """
     fig = px.scatter_3d(
-        df_plot, x='x', y='y', z='z', 
+        df_plot, 
+        x='x', y='y', z='z', 
         color='Cluster',
-        hover_name='image name',
-        custom_data=['Specie Predetta', 'image name'],
-        title=titolo,
+        hover_name=DATASET_CONFIG['IMAGE_ID_COL'],
+        custom_data=[DATASET_CONFIG['PREDICTION_COL'], DATASET_CONFIG['IMAGE_ID_COL']],
+        title=title,
         color_discrete_sequence=px.colors.qualitative.Plotly
     )
+    
     fig.update_traces(
         marker=dict(size=5, opacity=0.8),
         hovertemplate=(
             "<b>%{hovertext}</b><br>"
-            "Specie: %{customdata[0]}<br>"
+            "Label: %{customdata[0]}<br>"
             "<extra></extra>"
         )
     )
+    
     fig.update_layout(
         margin=dict(l=0, r=0, b=0, t=40), 
         scene=dict(xaxis_title='', yaxis_title='', zaxis_title='')
     )
     return fig
 
-def genera_tabella_crosstab(df_plot):
+def generate_crosstab_table(df_plot):
     """
-    Riceve un DataFrame, calcola la crosstab e restituisce una tabella Dash Bootstrap.
+    Takes a DataFrame, calculates the crosstab using the configured
+    prediction column, and returns a Dash Bootstrap Table.
     """
-    ct = pd.crosstab(df_plot['Specie Predetta'], df_plot['Cluster'])
-    tabella = dbc.Table.from_dataframe(
+    target_column = DATASET_CONFIG['PREDICTION_COL']
+    
+    ct = pd.crosstab(df_plot[target_column], df_plot['Cluster'])
+    table = dbc.Table.from_dataframe(
         ct.reset_index(), 
         striped=True, bordered=True, hover=True, responsive=True, size="sm"
     )
-    return tabella
+    return table
 
-def calcola_percorso_hover(hoverData):
+def get_hover_image_path(hover_data):
     """
-    Estrae il nome dell'immagine dall'hoverData di Plotly,
-    controlla dinamicamente in quale sottocartella si trova (labeled o unlabeled)
-    e restituisce il percorso corretto per Dash.
+    Extracts the image name from Plotly hover_data, checks which configured 
+    folder it belongs to, and returns the proper Dash asset URL.
+    
+    NOTE: Users must ensure their image folders are placed inside the 
+    'dashboard/assets/' directory and match the names in DATASET_CONFIG.
     """
-    if hoverData is None:
+    if hover_data is None:
         return "", "Move the mouse over a point."
 
-    nome_immagine = hoverData['points'][0]['customdata'][1]
-    quella_pagina = os.path.dirname(os.path.abspath(__file__))
-    radice_progetto = os.path.dirname(quella_pagina)
+    # Index 1 corresponds to IMAGE_ID_COL in the 3D plot's custom_data
+    image_name = hover_data['points'][0]['customdata'][1]
     
-    percorso_controllo_labeled = os.path.join(radice_progetto, "dashboard", "assets", "labeled_images", nome_immagine)
+    current_page_path = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_page_path)
     
-    if os.path.exists(percorso_controllo_labeled):
-        sottocartella = "labeled_images"
-        tag_stato = "labeled"
+    dir_labeled = DATASET_CONFIG['LABELED_IMAGES_DIR']
+    dir_unlabeled = DATASET_CONFIG['UNLABELED_IMAGES_DIR']
+    
+    # Check if the file exists in the labeled folder
+    labeled_check_path = os.path.join(project_root, "dashboard", "assets", dir_labeled, image_name)
+    
+    if os.path.exists(labeled_check_path):
+        subfolder = dir_labeled
+        status_tag = "Labeled"
     else:
-        sottocartella = "unlabeled_images"
-        tag_stato = "UNlabeled"
+        subfolder = dir_unlabeled
+        status_tag = "Unlabeled"
         
-    percorso_immagine = dash.get_asset_url(f"{sottocartella}/{nome_immagine}")
-    return percorso_immagine, f"[{tag_stato}] File: {nome_immagine}"
+    image_url = dash.get_asset_url(f"{subfolder}/{image_name}")
+    return image_url, f"[{status_tag}] File: {image_name}"
 
 # ==========================================
-# 4. ESECUZIONE AL CARICAMENTO (Cache)
+# INITIALIZATION ON LOAD (In-Memory Cache)
 # ==========================================
-# Chiamiamo la funzione una volta sola quando il modulo viene importato.
-# In questo modo i dati restano in memoria (RAM) e l'app è velocissima.
-EMBEDDINGS_GLOBALI, DF_GLOBALE = carica_tutti_i_dati()
+# Executed once when the module is imported to keep the app fast.
+GLOBAL_EMBEDDINGS, GLOBAL_DF = load_features_and_metadata()    

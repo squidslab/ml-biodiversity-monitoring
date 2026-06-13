@@ -8,7 +8,7 @@ import hdbscan
 import umap.umap_ as umap
 from sklearn.metrics import fowlkes_mallows_score, silhouette_score
 
-from utils import EMBEDDINGS_GLOBALI, DF_GLOBALE, genera_grafico_3d, genera_tabella_crosstab, calcola_percorso_hover
+from utils import DATASET_CONFIG, GLOBAL_EMBEDDINGS, GLOBAL_DF, generate_3d_scatter_plot, generate_crosstab_table, get_hover_image_path
 
 dash.register_page(__name__, path='/hdbscan', name='HDBSCAN')
 
@@ -17,9 +17,9 @@ ORDINE_CATEGORIE = ['Labeled Set', 'Curated', 'Usable', 'Hardcore', 'Ruined Surf
 # ==========================================
 # PREPARAZIONE DATI INIZIALI
 # ==========================================
-maschera_labeled = DF_GLOBALE['UnifiedCategory'] == 'Labeled Set'
-X_labeled = EMBEDDINGS_GLOBALI[maschera_labeled]
-df_labeled = DF_GLOBALE[maschera_labeled].copy()
+maschera_labeled = GLOBAL_DF['UnifiedCategory'] == 'Labeled Set'
+X_labeled = GLOBAL_EMBEDDINGS[maschera_labeled]
+df_labeled = GLOBAL_DF[maschera_labeled].copy()
 
 # =========================================================
 # LAYOUT
@@ -292,11 +292,6 @@ layout = html.Div([
         ], width=12, lg=9)
     ])
 ], className="mb-5")
-
-# =========================================================
-# CALLBACKS: FASE 1 (Auto-Tuning)
-# =========================================================
-
 @callback(
     [Output('uh-slider-mcs-lab', 'value', allow_duplicate=True),
      Output('uh-slider-ms-lab', 'value', allow_duplicate=True),
@@ -309,16 +304,15 @@ def auto_ottimizza_uh_labeled(n_clicks, umap_neighbors):
     if not n_clicks:
         raise PreventUpdate
 
+    colonna_target = DATASET_CONFIG['PREDICTION_COL']
     risultati = []
     best_score = -1
     best_mcs = 15
     best_ms = 5
     
-    # Riduzione della dimensionalità
     reducer = umap.UMAP(n_neighbors=umap_neighbors, min_dist=0.25, n_components=15, metric='cosine', random_state=42)
     X_compresso = reducer.fit_transform(X_labeled)
     
-    # Grid Search 
     for mcs in range(10, 45, 5):
         for ms in range(1, 15, 2):
             clusterer = hdbscan.HDBSCAN(min_cluster_size=mcs, min_samples=ms, metric='euclidean', cluster_selection_method='eom')
@@ -326,11 +320,10 @@ def auto_ottimizza_uh_labeled(n_clicks, umap_neighbors):
             
             noise_ratio = np.sum(labels == -1) / len(labels)
             
-            # Esclude combinazioni che generano un livello di Noise superiore al 40%
             if noise_ratio > 0.4:
                 continue 
                 
-            fmi_base = fowlkes_mallows_score(df_labeled['Specie Predetta'], labels)
+            fmi_base = fowlkes_mallows_score(df_labeled[colonna_target], labels)
             
             score_finale = fmi_base * (1.0 - noise_ratio)
             
@@ -356,10 +349,10 @@ def auto_ottimizza_uh_labeled(n_clicks, umap_neighbors):
      Input('store-top5-uh-lab', 'data')]
 )
 def aggiorna_uh_labeled(umap_neighbors, mcs, ms, top5_data):
+    colonna_target = DATASET_CONFIG['PREDICTION_COL']
     reducer_clustering = umap.UMAP(n_neighbors=umap_neighbors, min_dist=0.25, n_components=15, metric='cosine', random_state=42)
     X_clustering = reducer_clustering.fit_transform(X_labeled)
     
-    # Estrazione dei Cluster
     clusterer = hdbscan.HDBSCAN(min_cluster_size=mcs, min_samples=ms, metric='euclidean', cluster_selection_method='eom')
     labels = clusterer.fit_predict(X_clustering)
     
@@ -373,14 +366,14 @@ def aggiorna_uh_labeled(umap_neighbors, mcs, ms, top5_data):
     df_plot['z'] = X_plot[:, 2]
     
     noise_ratio = np.sum(labels == -1) / len(labels)
-    fmi = fowlkes_mallows_score(df_plot['Specie Predetta'], labels)
+    fmi = fowlkes_mallows_score(df_plot[colonna_target], labels)
 
-    fig = genera_grafico_3d(df_plot, " ")
+    fig = generate_3d_scatter_plot(df_plot, title=" ")
     
     if 'Noise' in df_plot['Cluster'].values:
         fig.update_traces(selector=dict(name="Noise"), marker=dict(color='rgba(150, 150, 150, 0.3)'))
 
-    tabella = genera_tabella_crosstab(df_plot)
+    tabella = generate_crosstab_table(df_plot)
     
     elementi_box = [
         html.Hr(className="mb-4"),
@@ -399,10 +392,6 @@ def aggiorna_uh_labeled(umap_neighbors, mcs, ms, top5_data):
             )
             
     return fig, tabella, html.Div(elementi_box)
-
-# =========================================================
-# GESTIONE FILTRI E SYNC
-# =========================================================
 
 @callback(
     [Output('filter-main-uh', 'value'),
@@ -436,9 +425,6 @@ def gestisci_input_uh_ted(filtri_selezionati, n_clicks, lab_neigh, lab_mcs, lab_
         
     return nuovi_filtri, ted_neigh, ted_mcs, ted_ms
 
-# =========================================================
-# FASE 2: UNLABELED SET
-# =========================================================
 @callback(
     [Output('uh-grafico-3d-ted', 'figure'), 
      Output('uh-tabella-crosstab-ted', 'children'), 
@@ -454,9 +440,9 @@ def aggiorna_uh_ted(umap_neighbors, mcs, ms, top5_data, categorie):
         return dash.no_update, "Nessun dato", html.Div("Seleziona almeno un filtro")
 
     categorie_attive = [c for c in categorie if c != 'ALL']
-    maschera_ted = DF_GLOBALE['UnifiedCategory'].isin(categorie_attive)
-    X_ted = EMBEDDINGS_GLOBALI[maschera_ted]
-    df_ted = DF_GLOBALE[maschera_ted].copy()
+    maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
+    X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
+    df_ted = GLOBAL_DF[maschera_ted].copy()
     
     if len(X_ted) < mcs:
         return dash.no_update, "Pochi dati", html.Div("Dati insufficienti.")
@@ -476,14 +462,13 @@ def aggiorna_uh_ted(umap_neighbors, mcs, ms, top5_data, categorie):
     df_ted['z'] = X_plot[:, 2]
     
     noise_ratio = np.sum(labels == -1) / len(labels)
-    num_clusters = len(set(labels)) - (1 if -1 in labels else 0)
 
-    fig = genera_grafico_3d(df_ted, " ")
+    fig = generate_3d_scatter_plot(df_ted, title=" ")
     
     if 'Noise' in df_ted['Cluster'].values:
         fig.update_traces(selector=dict(name="Noise"), marker=dict(color='rgba(150, 150, 150, 0.3)'))
 
-    tabella = genera_tabella_crosstab(df_ted)
+    tabella = generate_crosstab_table(df_ted)
 
     elementi_box = [
         html.Hr(className="mb-4"),
@@ -516,10 +501,11 @@ def auto_ottimizza_uh_ted_unsupervised_total(n_clicks, categorie, umap_neighbors
     if not n_clicks or not categorie:
         raise PreventUpdate
 
+    colonna_target = DATASET_CONFIG['PREDICTION_COL']
     categorie_attive = [c for c in categorie if c != 'ALL']
-    maschera_ted = DF_GLOBALE['UnifiedCategory'].isin(categorie_attive)
-    df_ted = DF_GLOBALE[maschera_ted].copy()
-    X_ted = EMBEDDINGS_GLOBALI[maschera_ted]
+    maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
+    df_ted = GLOBAL_DF[maschera_ted].copy()
+    X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
     
     if len(X_ted) < 10:
         raise PreventUpdate
@@ -548,7 +534,7 @@ def auto_ottimizza_uh_ted_unsupervised_total(n_clicks, categorie, umap_neighbors
                 
             if usa_ancore:
                 labels_pred_ancore = labels[maschera_labeled_interna]
-                labels_reali_ancore = df_ted[maschera_labeled_interna]['Specie Predetta']
+                labels_reali_ancore = df_ted[maschera_labeled_interna][colonna_target]
                 
                 valore_metrica = fowlkes_mallows_score(labels_reali_ancore, labels_pred_ancore)
                 nome_metrica = "FMI"
@@ -587,18 +573,14 @@ def auto_ottimizza_uh_ted_unsupervised_total(n_clicks, categorie, umap_neighbors
         
     return best_mcs, best_ms, top5
 
-# =========================================================
-# CALLBACK HOVER
-# =========================================================
-
 @callback(
     [Output('uh-hover-image-lab', 'src'), Output('uh-hover-text-lab', 'children')],
     Input('uh-grafico-3d-lab', 'hoverData')
 )
-def hover_lab(hoverData): return calcola_percorso_hover(hoverData)
+def hover_lab(hoverData): return get_hover_image_path(hoverData)
 
 @callback(
     [Output('uh-hover-image-ted', 'src'), Output('uh-hover-text-ted', 'children')],
     Input('uh-grafico-3d-ted', 'hoverData')
 )
-def hover_ted(hoverData): return calcola_percorso_hover(hoverData)
+def hover_ted(hoverData): return get_hover_image_path(hoverData)

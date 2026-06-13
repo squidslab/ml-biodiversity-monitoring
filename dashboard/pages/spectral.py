@@ -9,7 +9,14 @@ from sklearn.metrics import adjusted_mutual_info_score, adjusted_rand_score, sil
 from sklearn.neighbors import kneighbors_graph
 from dash.exceptions import PreventUpdate
 
-from utils import EMBEDDINGS_GLOBALI, DF_GLOBALE, genera_grafico_3d, genera_tabella_crosstab, calcola_percorso_hover
+from utils import (
+    DATASET_CONFIG,
+    GLOBAL_EMBEDDINGS, 
+    GLOBAL_DF, 
+    generate_3d_scatter_plot,
+    generate_crosstab_table,
+    get_hover_image_path
+)
 
 dash.register_page(__name__, path='/spectral', name='Spectral Clustering')
 
@@ -18,9 +25,9 @@ ORDINE_CATEGORIE = ['Labeled Set', 'Curated', 'Usable', 'Hardcore', 'Ruined Surf
 # ==========================================
 # PREPARAZIONE DATI INIZIALI
 # ==========================================
-maschera_test = DF_GLOBALE['is_test_set'] == True
-X_labeled = EMBEDDINGS_GLOBALI[maschera_test]
-df_labeled = DF_GLOBALE[maschera_test].copy()
+maschera_test = GLOBAL_DF['is_labeled_set'] == True
+X_labeled = GLOBAL_EMBEDDINGS[maschera_test]
+df_labeled = GLOBAL_DF[maschera_test].copy()
 
 # ==========================================
 # LAYOUT
@@ -282,7 +289,6 @@ layout = html.Div([
     ])
 ], className="mb-5")
 
-
 # ==========================================
 # CALLBACKS
 # ==========================================
@@ -306,11 +312,12 @@ def aggiorna_spectral_labeled(n_clusters, n_neighbors, top5_data):
     df_plot = df_labeled.copy()
     df_plot['Cluster'] = labels.astype(str)
     
-    fig = genera_grafico_3d(df_plot, "")
-    tabella = genera_tabella_crosstab(df_plot) 
+    fig = generate_3d_scatter_plot(df_plot, title="")
+    tabella = generate_crosstab_table(df_plot) 
     
-    ami = adjusted_mutual_info_score(df_plot['Specie Predetta'], labels)
-    ari = adjusted_rand_score(df_plot['Specie Predetta'], labels)
+    colonna_target = DATASET_CONFIG['PREDICTION_COL']
+    ami = adjusted_mutual_info_score(df_plot[colonna_target], labels)
+    ari = adjusted_rand_score(df_plot[colonna_target], labels)
     
     elementi_box = [
         html.Hr(className="mb-4"),
@@ -345,6 +352,7 @@ def auto_ottimizza_vicini_labeled(n_clicks, k_clusters):
     if not n_clicks:
         raise PreventUpdate
 
+    colonna_target = DATASET_CONFIG['PREDICTION_COL']
     risultati = []
     best_score = -1
     best_vicini = 5
@@ -355,8 +363,8 @@ def auto_ottimizza_vicini_labeled(n_clicks, k_clusters):
         
         labels = SpectralClustering(n_clusters=k_clusters, affinity='precomputed', assign_labels='cluster_qr', random_state=42).fit_predict(grafo)
         
-        ami = adjusted_mutual_info_score(df_labeled['Specie Predetta'], labels)
-        ari = adjusted_rand_score(df_labeled['Specie Predetta'], labels)
+        ami = adjusted_mutual_info_score(df_labeled[colonna_target], labels)
+        ari = adjusted_rand_score(df_labeled[colonna_target], labels)
         score = (ami + ari) / 2.0
         
         risultati.append({'vicini': vicini, 'ami': ami, 'ari': ari, 'score': score, 'k_clusters': k_clusters}) 
@@ -377,7 +385,7 @@ def auto_ottimizza_vicini_labeled(n_clicks, k_clusters):
     Input('spectral-grafico-3d', 'hoverData')
 )
 def aggiorna_hover_spectral_labeled(hoverData):
-    return calcola_percorso_hover(hoverData)
+    return get_hover_image_path(hoverData)
 
 # UNlabeled Set: Aggiornamento Grafico, Tabella e Metriche
 # ==========================================
@@ -394,9 +402,9 @@ def aggiorna_spectral_ted(categorie, n_clusters, n_neighbors):
         return px.scatter_3d(title="Seleziona almeno un filtro"), "Nessun dato", html.Div("Seleziona almeno un filtro")
 
     categorie_attive = [c for c in categorie if c != 'ALL']
-    maschera_ted = DF_GLOBALE['UnifiedCategory'].isin(categorie_attive)
-    X_ted = EMBEDDINGS_GLOBALI[maschera_ted]
-    df_ted = DF_GLOBALE[maschera_ted].copy()
+    maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
+    X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
+    df_ted = GLOBAL_DF[maschera_ted].copy()
     
     if len(X_ted) < n_clusters:
         return px.scatter_3d(title=f"Dati insufficienti ({len(X_ted)} immagini)"), "Nessun dato", html.Div("Pochi dati")
@@ -406,8 +414,8 @@ def aggiorna_spectral_ted(categorie, n_clusters, n_neighbors):
     labels = SpectralClustering(n_clusters=n_clusters, affinity='precomputed', assign_labels='cluster_qr', random_state=42).fit_predict(grafo)
     df_ted['Cluster'] = labels.astype(str)
     
-    fig = genera_grafico_3d(df_ted, titolo="Unlabeled Set")
-    tabella = genera_tabella_crosstab(df_ted)
+    fig = generate_3d_scatter_plot(df_ted, title="Unlabeled Set")
+    tabella = generate_crosstab_table(df_ted)
     
     try:
         score = silhouette_score(X_ted, labels, metric='cosine')
@@ -429,7 +437,7 @@ def aggiorna_spectral_ted(categorie, n_clusters, n_neighbors):
     Input('ted-grafico-3d', 'hoverData')
 )
 def mostra_immagine_hover(hoverData):
-    return calcola_percorso_hover(hoverData)
+    return get_hover_image_path(hoverData)
 
 # UNlabeled Set: Gestione Filtri "Seleziona Tutti" e Sincronizzazione Parametri
 # ==========================================
@@ -454,7 +462,6 @@ def gestisci_input_ted(filtri_selezionati, n_clicks, lab_k, lab_neigh, ted_k, te
         elif filtri_selezionati == ['ALL']:
              nuovi_filtri = []
 
-    # Logica per il pulsante "Usa Parametri Labeled Set"
     if triggered_id == 'btn-sync-params':
         return nuovi_filtri, lab_k, lab_neigh
 
@@ -475,8 +482,8 @@ def auto_ottimizza_cluster_ted(n_clicks, n_neighbors, categorie):
         raise PreventUpdate
 
     categorie_attive = [c for c in categorie if c != 'ALL']
-    maschera_ted = (~DF_GLOBALE['is_test_set']) & (DF_GLOBALE['UnifiedCategory'].isin(categorie_attive))
-    X_ted = EMBEDDINGS_GLOBALI[maschera_ted]
+    maschera_ted = (~GLOBAL_DF['is_labeled_set']) & (GLOBAL_DF['UnifiedCategory'].isin(categorie_attive))
+    X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
     if len(X_ted) < 10: 
         raise PreventUpdate
 
@@ -498,4 +505,3 @@ def auto_ottimizza_cluster_ted(n_clicks, n_neighbors, categorie):
             continue
            
     return best_k
-
