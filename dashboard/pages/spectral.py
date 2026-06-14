@@ -426,7 +426,7 @@ def aggiorna_spectral_ted(categorie, n_clusters, n_neighbors):
     labels = SpectralClustering(n_clusters=n_clusters, affinity='precomputed', assign_labels='cluster_qr', random_state=42).fit_predict(grafo)
     df_ted['Cluster'] = labels.astype(str)
     
-    fig = generate_3d_scatter_plot(df_ted, title="Unlabeled Set")
+    fig = generate_3d_scatter_plot(df_ted, title=" ")
     tabella = generate_crosstab_table(df_ted)
     
     try:
