@@ -12,12 +12,12 @@ The pipeline is highly modular by design. You can run the full process, or easil
 orchID_project/
 ├── data/                       # Dataset directories 
 │   ├── 00_metadata/            # Place your .xlsx files here 
-│   ├── 01_raw/                 
-   │   │   ├── unlabeled/          # Raw images of unknown species
-   │   │   └── labeled/            # Raw images of known species 
+│   ├── 01_raw/                  
+│   │   ├── unlabeled/              # Raw images of unknown species
+│   │   └── labeled/                # Raw images of known species 
 │   ├── 02_preprocessed/        # Output of Unit 1 (cropped images)
-   │   │   ├── unlabeled/          # Cropped unlabeled images
-   │   │   └── labeled/            # Cropped labeled images
+│   │   ├── unlabeled/              # Cropped unlabeled images
+│   │   └── labeled/                # Cropped labeled images
 │   └── 03_features/            # Output of Unit 2 (.npz embeddings)
 │       ├── features_unlabeled.npz
 │       └── features_labeled.npz
