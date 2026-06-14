@@ -14,12 +14,28 @@ classificazione/
 features/
 
 # ==========================================
-# DATA PIPELINE 
+# DATA PIPELINE (Ignores content, keeps structure via .gitkeep)
 # ==========================================
 data/00_metadata/*
-data/01_raw/*
-data/02_preprocessed/*
+!data/00_metadata/.gitkeep
+
+data/01_raw/unlabeled/*
+!data/01_raw/unlabeled/.gitkeep
+
+data/01_raw/labeled/*
+!data/01_raw/labeled/.gitkeep
+
+data/02_preprocessed/unlabeled/*
+!data/02_preprocessed/unlabeled/.gitkeep
+
+data/02_preprocessed/labeled/*
+!data/02_preprocessed/labeled/.gitkeep
+
 data/03_features/*
+!data/03_features/.gitkeep
+
+models/*
+!models/.gitkeep
 
 # ==========================================
 # MACHINE LEARNING MODELS & WEIGHTS
