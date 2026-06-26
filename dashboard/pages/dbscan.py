@@ -9,7 +9,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.metrics import fowlkes_mallows_score, silhouette_score
 from sklearn.metrics import fowlkes_mallows_score, adjusted_rand_score, adjusted_mutual_info_score
 
-from utils import DATASET_CONFIG, GLOBAL_EMBEDDINGS, GLOBAL_DF, generate_3d_scatter_plot, generate_crosstab_table, get_hover_image_path
+from utils import DATASET_CONFIG, GLOBAL_EMBEDDINGS, GLOBAL_DF, DYNAMIC_CATEGORIES, generate_3d_scatter_plot, generate_crosstab_table, get_hover_image_path
 
 dash.register_page(__name__, path='/dbscan', name='DBSCAN')
 
@@ -214,8 +214,8 @@ layout = html.Div([
                 dbc.CardBody([
                     dbc.Checklist(
                         id='filter-main-dbscan',
-                        options=[{'label': 'Select All', 'value': 'ALL'}] + [{'label': c, 'value': c} for c in ORDINE_CATEGORIE],
-                        value=['Curated'], 
+                        options=[{'label': 'Select All', 'value': 'ALL'}] + [{'label': c, 'value': c} for c in DYNAMIC_CATEGORIES],
+                        value=[DYNAMIC_CATEGORIES[1]] if len(DYNAMIC_CATEGORIES) > 1 else (DYNAMIC_CATEGORIES[:1] if DYNAMIC_CATEGORIES else []),
                         className="mb-2"
                     )
                 ], className="p-4")
@@ -355,6 +355,9 @@ def aggiorna_dbscan_labeled(eps, ms, top5_data):
     
     noise_ratio = np.sum(labels == -1) / len(labels)
     fmi = fowlkes_mallows_score(df_plot[colonna_target], labels)
+    ami = adjusted_mutual_info_score(df_plot[colonna_target], labels)
+    ari = adjusted_rand_score(df_plot[colonna_target], labels)      
+    # ------------------------
  
     if df_plot.empty:
         return dash.no_update, "No data (All of it is classified as Noise)", html.Div("Tutte le foto sono state etichettate come Noise.")
@@ -370,6 +373,8 @@ def aggiorna_dbscan_labeled(eps, ms, top5_data):
         html.Hr(className="mb-4"),
         html.H6("Validation Metrics", className="fw-bold text-muted mb-3 text-uppercase", style={"letterSpacing": "1px"}),
         html.P(f"FMI: {fmi:.4f}", className="mb-1"),
+        html.P(f"AMI: {ami:.4f}", className="mb-1"), 
+        html.P(f"ARI: {ari:.4f}", className="mb-1"), 
         html.P(f"Noise: {noise_ratio:.1%}", className="mb-1 text-danger")
     ]
     
@@ -401,7 +406,7 @@ def gestisci_input_dbscan_ted(filtri_selezionati, n_clicks, lab_eps, lab_ms, ted
     
     if triggered_id == 'filter-main-dbscan':
         if 'ALL' in filtri_selezionati:
-            nuovi_filtri = ['ALL'] + ORDINE_CATEGORIE
+            nuovi_filtri = ['ALL'] + DYNAMIC_CATEGORIES
         elif filtri_selezionati == ['ALL']:
              nuovi_filtri = []
 
@@ -409,6 +414,7 @@ def gestisci_input_dbscan_ted(filtri_selezionati, n_clicks, lab_eps, lab_ms, ted
         return nuovi_filtri, lab_eps, lab_ms
 
     return nuovi_filtri, ted_eps, ted_ms
+
 
 @callback(
     [Output('dbscan-grafico-3d-ted', 'figure'), 
@@ -423,13 +429,17 @@ def aggiorna_dbscan_ted(eps, ms, categorie, top5_data):
     if not categorie:
         return dash.no_update, "No data", html.Div("Select at least one filter")
 
-    categorie_attive = [c for c in categorie if c != 'ALL']
+    if 'ALL' in categorie:
+        categorie_attive = DYNAMIC_CATEGORIES
+    else:
+        categorie_attive = categorie
+
     maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
     X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
     df_ted = GLOBAL_DF[maschera_ted].copy()
     
     if len(X_ted) < ms:
-        return dash.no_update, "Not enought data", html.Div("Dati insufficienti.")
+        return dash.no_update, "Not enough data", html.Div("Dati insufficienti.")
 
     clusterer = DBSCAN(eps=eps, min_samples=ms, metric='euclidean')
     labels = clusterer.fit_predict(X_ted)
@@ -475,17 +485,20 @@ def aggiorna_dbscan_ted(eps, ms, categorie, top5_data):
     
     return fig, tabella, html.Div(elementi_box)
 
+
 @callback(
     [Output('dbscan-hover-image-lab', 'src'), Output('dbscan-hover-text-lab', 'children')],
     Input('dbscan-grafico-3d-lab', 'hoverData')
 )
 def hover_lab(hoverData): return get_hover_image_path(hoverData)
 
+
 @callback(
     [Output('dbscan-hover-image-ted', 'src'), Output('dbscan-hover-text-ted', 'children')],
     Input('dbscan-grafico-3d-ted', 'hoverData')
 )
 def hover_ted(hoverData): return get_hover_image_path(hoverData)
+
 
 @callback(
     [Output('dbscan-slider-eps-ted', 'value', allow_duplicate=True),
@@ -500,7 +513,12 @@ def auto_ottimizza_dbscan_misto(n_clicks, categorie):
         raise PreventUpdate
 
     colonna_target = DATASET_CONFIG['PREDICTION_COL']
-    categorie_attive = [c for c in categorie if c != 'ALL']
+    
+    if 'ALL' in categorie:
+        categorie_attive = DYNAMIC_CATEGORIES
+    else:
+        categorie_attive = categorie
+        
     maschera_totale = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
     
     df_subset = GLOBAL_DF[maschera_totale].copy()
@@ -568,7 +586,11 @@ def download_excel_dbscan(n_clicks, eps, ms, categorie):
     if not n_clicks or not categorie:
         raise PreventUpdate
 
-    categorie_attive = [c for c in categorie if c != 'ALL']
+    if 'ALL' in categorie:
+        categorie_attive = DYNAMIC_CATEGORIES
+    else:
+        categorie_attive = categorie
+        
     maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
     X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
     df_ted = GLOBAL_DF[maschera_ted].copy()

@@ -8,11 +8,10 @@ import hdbscan
 import umap.umap_ as umap
 from sklearn.metrics import fowlkes_mallows_score, silhouette_score
 
-from utils import DATASET_CONFIG, GLOBAL_EMBEDDINGS, GLOBAL_DF, generate_3d_scatter_plot, generate_crosstab_table, get_hover_image_path
+from utils import DATASET_CONFIG, GLOBAL_EMBEDDINGS, GLOBAL_DF, DYNAMIC_CATEGORIES, generate_3d_scatter_plot, generate_crosstab_table, get_hover_image_path
 
 dash.register_page(__name__, path='/hdbscan', name='HDBSCAN')
 
-ORDINE_CATEGORIE = ['Labeled Set', 'Curated', 'Usable', 'Hardcore', 'Ruined Surface', 'Hands', 'Others']
 
 # ==========================================
 # PREPARAZIONE DATI INIZIALI
@@ -239,8 +238,8 @@ layout = html.Div([
                 dbc.CardBody([
                     dbc.Checklist(
                         id='filter-main-uh',
-                        options=[{'label': 'Select All', 'value': 'ALL'}] + [{'label': c, 'value': c} for c in ORDINE_CATEGORIE],
-                        value=['Curated'], 
+                        options=[{'label': 'Select All', 'value': 'ALL'}] + [{'label': c, 'value': c} for c in DYNAMIC_CATEGORIES],
+                        value=[DYNAMIC_CATEGORIES[1]] if len(DYNAMIC_CATEGORIES) > 1 else (DYNAMIC_CATEGORIES[:1] if DYNAMIC_CATEGORIES else []),
                         className="mb-2"
                     )
                 ], className="p-4")
@@ -424,8 +423,8 @@ def gestisci_input_uh_ted(filtri_selezionati, n_clicks, lab_neigh, lab_mcs, lab_
     nuovi_filtri = filtri_selezionati
     
     if triggered_id == 'filter-main-uh':
-        if 'ALL' in filtri_selezionati and len(filtri_selezionati) < len(ORDINE_CATEGORIE) + 1:
-            nuovi_filtri = ['ALL'] + ORDINE_CATEGORIE
+        if 'ALL' in filtri_selezionati:
+            nuovi_filtri = ['ALL'] + DYNAMIC_CATEGORIES
         elif filtri_selezionati == ['ALL']:
             nuovi_filtri = []
 
@@ -451,7 +450,11 @@ def aggiorna_uh_ted(umap_neighbors, mcs, ms, top5_data, categorie):
     if not categorie:
         return dash.no_update, "Nessun dato", html.Div("Seleziona almeno un filtro")
 
-    categorie_attive = [c for c in categorie if c != 'ALL']
+    if 'ALL' in categorie:
+        categorie_attive = DYNAMIC_CATEGORIES
+    else:
+        categorie_attive = categorie
+
     maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
     X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
     df_ted = GLOBAL_DF[maschera_ted].copy()
@@ -514,7 +517,12 @@ def auto_ottimizza_uh_ted_unsupervised_total(n_clicks, categorie, umap_neighbors
         raise PreventUpdate
 
     colonna_target = DATASET_CONFIG['PREDICTION_COL']
-    categorie_attive = [c for c in categorie if c != 'ALL']
+
+    if 'ALL' in categorie:
+        categorie_attive = DYNAMIC_CATEGORIES
+    else:
+        categorie_attive = categorie
+
     maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
     df_ted = GLOBAL_DF[maschera_ted].copy()
     X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
@@ -613,7 +621,11 @@ def download_excel_uh(n_clicks, umap_neighbors, mcs, ms, categorie):
     if not n_clicks or not categorie:
         raise PreventUpdate
 
-    categorie_attive = [c for c in categorie if c != 'ALL']
+    if 'ALL' in categorie:
+        categorie_attive = DYNAMIC_CATEGORIES
+    else:
+        categorie_attive = categorie
+
     maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
     X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
     df_ted = GLOBAL_DF[maschera_ted].copy()

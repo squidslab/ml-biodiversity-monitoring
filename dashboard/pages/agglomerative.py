@@ -8,11 +8,10 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import adjusted_mutual_info_score, adjusted_rand_score, silhouette_score
 from dash.exceptions import PreventUpdate
 
-from utils import DATASET_CONFIG, GLOBAL_EMBEDDINGS, GLOBAL_DF, generate_3d_scatter_plot, generate_crosstab_table, get_hover_image_path
+from utils import DATASET_CONFIG, GLOBAL_EMBEDDINGS, GLOBAL_DF, DYNAMIC_CATEGORIES, generate_3d_scatter_plot, generate_crosstab_table, get_hover_image_path
 
 dash.register_page(__name__, path='/agglomerative', name='Agglomerative Clustering')
 
-ORDINE_CATEGORIE = ['Curated', 'Usable', 'Hardcore', 'Ruined Surface', 'Hands', 'Others', 'Labeled Set']
 
 maschera_test = GLOBAL_DF['is_labeled_set'] == True
 X_labeled = GLOBAL_EMBEDDINGS[maschera_test]
@@ -195,8 +194,8 @@ layout = html.Div([
                 dbc.CardBody([
                     dbc.Checklist(
                         id='filter-main-agg',
-                        options=[{'label': 'Select All', 'value': 'ALL'}] + [{'label': c, 'value': c} for c in ORDINE_CATEGORIE],
-                        value=['Curated'], 
+                        options=[{'label': 'Select All', 'value': 'ALL'}] + [{'label': c, 'value': c} for c in DYNAMIC_CATEGORIES],
+                        value=[DYNAMIC_CATEGORIES[1]] if len(DYNAMIC_CATEGORIES) > 1 else (DYNAMIC_CATEGORIES[:1] if DYNAMIC_CATEGORIES else []),
                         className="mb-2"
                     )
                 ], className="p-4")
@@ -348,7 +347,6 @@ def auto_ottimizza_linkage_labeled(n_clicks, k_clusters):
 )
 def aggiorna_hover_agg_labeled(hoverData):
     return get_hover_image_path(hoverData)
-
 @callback(
     [Output('ted-grafico-3d-agg', 'figure'),
      Output('ted-tabella-crosstab-agg', 'children'),
@@ -361,7 +359,11 @@ def aggiorna_agg_ted(categorie, n_clusters, linkage):
     if not categorie:
         return px.scatter_3d(title="Seleziona almeno un filtro"), "Nessun dato", html.Div("Seleziona almeno un filtro")
 
-    categorie_attive = [c for c in categorie if c != 'ALL']
+    if 'ALL' in categorie:
+        categorie_attive = DYNAMIC_CATEGORIES
+    else:
+        categorie_attive = categorie
+
     maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
     X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
     df_ted = GLOBAL_DF[maschera_ted].copy()
@@ -413,7 +415,7 @@ def gestisci_input_agg_ted(filtri_selezionati, n_clicks, lab_k, lab_link, ted_k,
     
     if triggered_id == 'filter-main-agg':
         if 'ALL' in filtri_selezionati:
-            nuovi_filtri = ['ALL'] + ORDINE_CATEGORIE
+            nuovi_filtri = ['ALL'] + DYNAMIC_CATEGORIES
         elif filtri_selezionati == ['ALL']:
              nuovi_filtri = []
 
@@ -433,7 +435,12 @@ def auto_ottimizza_cluster_agg_ted(n_clicks, linkage, categorie):
     if not n_clicks or not categorie:
         raise PreventUpdate
 
-    categorie_attive = [c for c in categorie if c != 'ALL']
+    if 'ALL' in categorie:
+        categorie_attive = DYNAMIC_CATEGORIES
+    else:
+        categorie_attive = categorie
+
+    # Nota: la tua maschera originale manteneva anche il controllo su 'is_labeled_set'.
     maschera_ted = (~GLOBAL_DF['is_labeled_set']) & (GLOBAL_DF['UnifiedCategory'].isin(categorie_attive))
     X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
     
@@ -469,7 +476,11 @@ def download_excel_agg(n_clicks, n_clusters, linkage, categorie):
     if not n_clicks or not categorie:
         raise PreventUpdate
 
-    categorie_attive = [c for c in categorie if c != 'ALL']
+    if 'ALL' in categorie:
+        categorie_attive = DYNAMIC_CATEGORIES
+    else:
+        categorie_attive = categorie
+
     maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
     X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
     df_ted = GLOBAL_DF[maschera_ted].copy()

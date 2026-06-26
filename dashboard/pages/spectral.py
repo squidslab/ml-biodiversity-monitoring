@@ -13,6 +13,7 @@ from utils import (
     DATASET_CONFIG,
     GLOBAL_EMBEDDINGS, 
     GLOBAL_DF, 
+    DYNAMIC_CATEGORIES,
     generate_3d_scatter_plot,
     generate_crosstab_table,
     get_hover_image_path
@@ -20,7 +21,6 @@ from utils import (
 
 dash.register_page(__name__, path='/spectral', name='Spectral Clustering')
 
-ORDINE_CATEGORIE = ['Labeled Set', 'Curated', 'Usable', 'Hardcore', 'Ruined Surface', 'Hands', 'Others']
 
 # ==========================================
 # PREPARAZIONE DATI INIZIALI
@@ -235,8 +235,10 @@ layout = html.Div([
                 dbc.CardBody([
                     dbc.Checklist(
                         id='filter-main',
-                        options=[{'label': 'Select All', 'value': 'ALL'}] + [{'label': c, 'value': c} for c in ORDINE_CATEGORIE],
-                        value=['Curated'], 
+                        options=[{'label': 'Select All', 'value': 'ALL'}] + [{'label': c, 'value': c} for c in DYNAMIC_CATEGORIES],
+                        
+                        value=[DYNAMIC_CATEGORIES[1]] if len(DYNAMIC_CATEGORIES) > 1 else (DYNAMIC_CATEGORIES[:1] if DYNAMIC_CATEGORIES else []), 
+                        
                         className="mb-2"
                     )
                 ], className="p-4")
@@ -412,17 +414,31 @@ def aggiorna_hover_spectral_labeled(hoverData):
 def aggiorna_spectral_ted(categorie, n_clusters, n_neighbors):
     if not categorie:
         return px.scatter_3d(title="Seleziona almeno un filtro"), "Nessun dato", html.Div("Seleziona almeno un filtro")
+    
+    if 'ALL' in categorie:
+        categorie_attive = DYNAMIC_CATEGORIES
+    else:
+        categorie_attive = categorie
 
-    categorie_attive = [c for c in categorie if c != 'ALL']
     maschera_ted = GLOBAL_DF['UnifiedCategory'].isin(categorie_attive)
     X_ted = GLOBAL_EMBEDDINGS[maschera_ted]
     df_ted = GLOBAL_DF[maschera_ted].copy()
     
-    if len(X_ted) < n_clusters:
-        return px.scatter_3d(title=f"Dati insufficienti ({len(X_ted)} immagini)"), "Nessun dato", html.Div("Pochi dati")
+    n_samples = len(X_ted)
+    
+    # Il numero di immagini deve essere matematicamente maggiore del numero di cluster
+    if n_samples <= n_clusters:
+        return px.scatter_3d(title=f"Dati insufficienti ({n_samples} img per {n_clusters} cluster)"), "Nessun dato", html.Div("Riduci i cluster o seleziona più dati")
         
-    grafo = kneighbors_graph(X_ted, n_neighbors=n_neighbors, metric='cosine', mode='connectivity', include_self=True)
+    n_neighbors_safe = min(n_neighbors, n_samples)
+        
+    grafo = kneighbors_graph(X_ted, n_neighbors=n_neighbors_safe, metric='cosine', mode='connectivity', include_self=True)
     grafo = 0.5 * (grafo + grafo.T)
+    
+    # Fallback di sicurezza: per piccolissimi dataset convertiamo in matrice densa
+    if n_samples < 20:
+        grafo = grafo.toarray()
+        
     labels = SpectralClustering(n_clusters=n_clusters, affinity='precomputed', assign_labels='cluster_qr', random_state=42).fit_predict(grafo)
     df_ted['Cluster'] = labels.astype(str)
     
@@ -435,7 +451,7 @@ def aggiorna_spectral_ted(categorie, n_clusters, n_neighbors):
         score = 0
 
     metriche = html.Div([
-        html.H6(f"Number of samples: {len(X_ted)}", className="text-secondary fw-bold"),
+        html.H6(f"Number of samples: {n_samples}", className="text-secondary fw-bold"),
         html.P(f"Silhouette Score: {score:.4f}", className="text-success fw-bold")
     ])
     
@@ -470,7 +486,7 @@ def gestisci_input_ted(filtri_selezionati, n_clicks, lab_k, lab_neigh, ted_k, te
     nuovi_filtri = filtri_selezionati
     if triggered_id == 'filter-main':
         if 'ALL' in filtri_selezionati:
-            nuovi_filtri = ['ALL'] + ORDINE_CATEGORIE
+            nuovi_filtri = ['ALL'] + DYNAMIC_CATEGORIES
         elif filtri_selezionati == ['ALL']:
              nuovi_filtri = []
 

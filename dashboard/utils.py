@@ -70,7 +70,7 @@ DATASET_CONFIG = {
     
     # --- Column Names in Metadata (Excel) ---
     'IMAGE_ID_COL': 'image name',           # Column used to match .npz names with Excel rows
-    'CATEGORY_COL': 'Categoria',            # Column used for the UI filtering system
+    'CATEGORY_COL': 'verbatimScientificName',            # Column used for the UI filtering system
     'PREDICTION_COL': 'Specie Predetta'     # Column containing the classification label
 }
 
@@ -292,3 +292,21 @@ def get_hover_image_path(hover_data):
 # ==========================================
 # Executed once when the module is imported to keep the app fast.
 GLOBAL_EMBEDDINGS, GLOBAL_DF = load_features_and_metadata()    
+
+def get_dynamic_categories(df):
+    if df.empty or 'UnifiedCategory' not in df.columns:
+        return []
+    
+    unique_cats = df['UnifiedCategory'].dropna().unique().tolist()
+    
+    unique_cats = sorted(unique_cats)
+    
+    # Se 'Labeled Set' è presente, forziamolo ad essere il primo elemento della lista
+    if 'Labeled Set' in unique_cats:
+        unique_cats.remove('Labeled Set')
+        unique_cats.insert(0, 'Labeled Set')
+        
+    return unique_cats
+
+# Esportiamo la lista dinamica in modo che le pagine Dash possano importarla
+DYNAMIC_CATEGORIES = get_dynamic_categories(GLOBAL_DF)
